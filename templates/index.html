@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECR Register</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="masthead">
+  <div>
+    <h1>Wage Register &amp; ECR Generator</h1>
+    <p class="sub">Monthly contribution register — prepared for upload to the EPFO Unified Portal</p>
+  </div>
+  <div class="masthead-right">
+    <div class="office">RO Bhubaneswar &nbsp;·&nbsp; Employer Module</div>
+    <div>Data stays in this session — nothing is saved on the server</div>
+  </div>
+</div>
+
+<div class="control-strip">
+  <div class="field">
+    <label for="estab-code">Establishment code</label>
+    <input id="estab-code" type="text" value="ORBBS0017675000" />
+  </div>
+  <div class="field month">
+    <label for="wage-month">Wage month</label>
+    <input id="wage-month" type="month" value="2026-08" />
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="wage">Wage Register</button>
+    <button class="tab-btn" data-tab="exit">Exit Register</button>
+  </div>
+</div>
+
+<div class="layout">
+
+  <div class="register-col" style="flex:1; min-width:0;">
+
+    <!-- WAGE PANEL -->
+    <div class="wage-panel active" id="panel-wage">
+      <div class="register">
+        <div class="register-head">
+          <h2>Employee Wages</h2>
+          <span class="count" id="wage-count">14 entries</span>
+        </div>
+        <div style="overflow-x:auto;">
+        <table class="ledger" id="wage-table">
+          <thead>
+            <tr>
+              <th class="left">#</th>
+              <th class="left">UAN</th>
+              <th class="left">Member name</th>
+              <th>Gross wages</th>
+              <th>EPF wages</th>
+              <th>EPS wages</th>
+              <th>EDLI wages</th>
+              <th>EPF contri.</th>
+              <th>EPS contri.</th>
+              <th>Diff</th>
+              <th>NCP days</th>
+              <th>Refund adv.</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="wage-tbody"><!-- rows injected --></tbody>
+        </table>
+        </div>
+        <div class="register-foot">
+          <div style="display:flex; gap:8px;">
+            <button class="btn" id="add-row-btn">+ Add employee</button>
+            <button class="btn ghost" id="upload-btn">Upload Excel / CSV</button>
+            <input type="file" id="upload-input" accept=".xlsx,.xlsm,.xls,.csv" style="display:none;" />
+          </div>
+          <div class="legend">
+            <span><span class="swatch ink"></span> you enter</span>
+            <span><span class="swatch pencil"></span> auto-calculated</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXIT PANEL -->
+    <div class="exit-panel" id="panel-exit">
+      <div class="register">
+        <div class="register-head">
+          <h2>Exits This Month</h2>
+          <span class="count" id="exit-count">2 entries</span>
+        </div>
+        <div style="overflow-x:auto;">
+        <table class="ledger" id="exit-table">
+          <thead>
+            <tr>
+              <th class="left">#</th>
+              <th class="left">UAN</th>
+              <th class="left">Name (reference only)</th>
+              <th>Exit date</th>
+              <th>Reason code</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="exit-tbody"></tbody>
+        </table>
+        </div>
+        <div class="register-foot">
+          <button class="btn" id="add-exit-btn">+ Add exit</button>
+          <div class="legend">
+            <span><span class="swatch ink"></span> you enter</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CHALLAN STUB -->
+  <div class="stub">
+    <div class="stub-top">
+      <div class="eyebrow">CHALLAN SUMMARY</div>
+      <h3>August 2026</h3>
+      <div class="estab" id="stub-estab">ORBBS0017675000</div>
+    </div>
+    <div class="stub-body">
+      <div class="stub-row"><span class="lbl">Gross wages</span><span class="val" id="s-gross">0</span></div>
+      <div class="stub-row"><span class="lbl">EPF wages</span><span class="val" id="s-epfw">0</span></div>
+      <div class="stub-row"><span class="lbl">EPS wages</span><span class="val" id="s-epsw">0</span></div>
+      <div class="stub-row"><span class="lbl">EDLI wages</span><span class="val" id="s-edliw">0</span></div>
+
+      <div class="stub-section-title">A/c No. 1 — EPF contribution</div>
+      <div class="stub-row sub"><span class="lbl">Ee share</span><span class="val" id="s-ac1ee">0</span></div>
+      <div class="stub-row sub"><span class="lbl">Er share</span><span class="val" id="s-ac1er">0</span></div>
+      <div class="stub-row sub"><span class="lbl">Total</span><span class="val" id="s-ac1t">0</span></div>
+
+      <div class="stub-section-title">A/c No. 10 — EPS contribution</div>
+      <div class="stub-row sub"><span class="lbl">Total</span><span class="val" id="s-ac10">0</span></div>
+
+      <div class="stub-section-title">A/c No. 2 — Admin charges</div>
+      <div class="stub-row sub"><span class="lbl">Total</span><span class="val" id="s-ac2">0</span></div>
+
+      <div class="stub-section-title">A/c No. 21 / 22 — EDLI</div>
+      <div class="stub-row sub"><span class="lbl">Contribution</span><span class="val" id="s-ac21">0</span></div>
+      <div class="stub-row sub"><span class="lbl">Admin charges</span><span class="val" id="s-ac22">0</span></div>
+    </div>
+    <div class="stub-grand">
+      <span class="lbl">Grand total</span>
+      <span class="val" id="s-grand">₹0</span>
+    </div>
+    <div class="stub-actions">
+      <button class="btn-generate" id="gen-ecr-btn">Generate ECR text file
+        <span class="fname" id="fname-ecr">ORBBS0017675000202608.txt</span>
+      </button>
+      <button class="btn-generate" id="gen-exit-btn" style="background:var(--ink);">Generate exit text file
+        <span class="fname" id="fname-exit">ORBBS0017675000202608exit.txt</span>
+      </button>
+      <p class="note">Prototype — buttons preview the filename only.<br>File generation wires up once the design is approved.</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop" id="mapping-modal">
+  <div class="modal">
+    <h3>Match your file's columns</h3>
+    <p class="modal-sub">We couldn't recognise every column automatically. Match each required field to a column from your file, then confirm.</p>
+    <div id="mapping-fields"></div>
+    <div class="modal-preview">
+      <div class="modal-preview-title">First rows of your file</div>
+      <div style="overflow-x:auto;">
+        <table class="ledger" id="mapping-preview-table"></table>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="mapping-cancel">Cancel</button>
+      <button class="btn-generate" id="mapping-confirm" style="width:auto; padding:10px 20px;">Import rows</button>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
