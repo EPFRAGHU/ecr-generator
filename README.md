@@ -47,6 +47,14 @@ No database connection to wire up — there's nothing to point at Neon here.
   required column can't be matched, a mapping step appears so you can pick it
   by hand. EPS Wages, EDLI Wages, EPF/EPS contributions and the diff are
   calculated automatically, same formulas as Sheet1 of the original workbook.
+- **Wage ceiling** — follows S.O. 5109(E): ₹15,000 up to August 2026,
+  ₹25,000 from October 2026. September 2026 is a split month (1–16 Sep at
+  ₹15,000, 17–30 Sep at ₹25,000, pro rata by days, single ECR) per the EPFO
+  FAQ. Each row has an "EPS member" flag (No = EPS wages 0, full employer
+  12% to EPF), and in September 2026 a "1–16 Sep status" choosing the FAQ
+  Q7 scenario: capped at ₹15,000 (C), full wages, EPF-only joining EPS on
+  17 Sep (B), or newly covered from 17 Sep (A). Enter the full-month EPF
+  wage; the pro-rated figure written to the ECR is shown under it.
 - **Exit Register tab** — UAN, name (reference only), exit date, reason code.
 - **Challan summary panel** — live totals (Gross/EPF/EPS/EDLI wages, A/c 1/2/10/21/22),
   mirroring the Textmain sheet.

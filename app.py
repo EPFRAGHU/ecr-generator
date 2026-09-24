@@ -12,6 +12,7 @@ a .txt file).
 from __future__ import annotations
 
 import io
+import math
 import re
 from datetime import datetime
 
@@ -59,21 +60,86 @@ def guess_mapping(headers: list[str]) -> dict[str, str | None]:
 
 # ---------------------------------------------------------------------------
 # Core wage calculations (mirrors Sheet1's formulas)
+#
+# Wage ceiling revised from 15,000 to 25,000 by S.O. 5109(E), effective
+# 17.09.2026. September 2026 is a split month (EPFO FAQ Q7/Q9): days 1-16
+# at the old ceiling, days 17-30 at the new one, reported in a single ECR.
 # ---------------------------------------------------------------------------
-def calc_row(gross, epf) -> dict:
-    epf = float(epf or 0)
-    eps_wages = 15000.0 if epf > 14999 else epf
-    edli_wages = 15000.0 if epf > 14999 else epf
-    epf_contri = round(epf * 0.12)
-    eps_contri = round(eps_wages * 0.0833)
-    diff = epf_contri - eps_contri
+OLD_CEILING = 15000
+NEW_CEILING = 25000
+SPLIT_MONTH = "2026-09"
+SPLIT_DAYS_BEFORE, SPLIT_DAYS_AFTER, SPLIT_DAYS_TOTAL = 16, 14, 30
+
+# How a member was treated from 01.09.2026 to 16.09.2026 (FAQ Q7 scenarios)
+SEP_BASES = {
+    "cap",    # Scenario C: EPS member contributing on wages capped at 15,000
+    "full",   # EPS member contributing on full (higher) wages, EPS capped
+    "noeps",  # Scenario B: EPF-only member on full wages, joins EPS 17.09.2026
+    "new",    # Scenario A: excluded employee, covered from 17.09.2026
+}
+
+
+def round_half_up(x: float) -> int:
+    # Python's round() is banker's rounding (2082.5 -> 2082); EPFO rounds up.
+    return math.floor(x + 0.5 + 1e-9)
+
+
+def ceiling_for(wage_month: str) -> int:
+    return NEW_CEILING if (wage_month or "") > SPLIT_MONTH else OLD_CEILING
+
+
+def calc_row(epf, wage_month="", eps_member=True, sep_basis="cap") -> dict:
+    """
+    `epf` is the member's EPF wages for the month. Outside September 2026 it
+    is the contribution base as entered; EPS/EDLI wages are capped at the
+    month's ceiling. In September 2026 it is the full-month wage and is
+    split per `sep_basis`.
+    """
+    w = float(epf or 0)
+    if wage_month == SPLIT_MONTH:
+        f1 = SPLIT_DAYS_BEFORE / SPLIT_DAYS_TOTAL
+        f2 = SPLIT_DAYS_AFTER / SPLIT_DAYS_TOTAL
+        old, new = min(w, OLD_CEILING), min(w, NEW_CEILING)
+        if not eps_member:
+            epf_w = w
+            eps_w = 0.0
+            edli_w = old * f1 + new * f2
+        elif sep_basis == "new":
+            epf_w = eps_w = edli_w = new * f2
+        elif sep_basis == "noeps":
+            epf_w = w * f1 + w * f2
+            eps_w = new * f2
+            edli_w = old * f1 + new * f2
+        elif sep_basis == "full":
+            epf_w = w * f1 + w * f2
+            eps_w = edli_w = old * f1 + new * f2
+        else:  # "cap"
+            epf_w = eps_w = edli_w = old * f1 + new * f2
+    else:
+        ceiling = ceiling_for(wage_month)
+        epf_w = w
+        eps_w = min(w, ceiling) if eps_member else 0.0
+        edli_w = min(w, ceiling)
+
+    epf_contri = round_half_up(epf_w * 0.12)
+    eps_contri = round_half_up(eps_w * 0.0833)
     return {
-        "eps_wages": round(eps_wages),
-        "edli_wages": round(edli_wages),
+        "epf_wages": round_half_up(epf_w),
+        "eps_wages": round_half_up(eps_w),
+        "edli_wages": round_half_up(edli_w),
         "epf_contri": epf_contri,
         "eps_contri": eps_contri,
-        "diff": diff,
+        "diff": epf_contri - eps_contri,
     }
+
+
+def row_eps_member(row: dict) -> bool:
+    return str(row.get("eps", "Y")).strip().upper() != "N"
+
+
+def row_sep_basis(row: dict) -> str:
+    basis = str(row.get("sep", "cap")).strip().lower()
+    return basis if basis in SEP_BASES else "cap"
 
 
 def validate_wage_row(row: dict) -> list[str]:
@@ -196,7 +262,7 @@ def generate_ecr():
     for row in rows:
         gross = float(row.get("gross") or 0)
         epf = float(row.get("epf") or 0)
-        calc = calc_row(gross, epf)
+        calc = calc_row(epf, wage_month, row_eps_member(row), row_sep_basis(row))
         ncp = row.get("ncp") or 0
         refund = row.get("refund") or 0
 
@@ -204,7 +270,7 @@ def generate_ecr():
             str(row.get("uan", ""))[:12],
             str(row.get("name", "")).upper(),
             str(int(gross))[:10],
-            str(int(epf))[:10],
+            str(calc["epf_wages"])[:10],
             str(calc["eps_wages"])[:10],
             str(calc["edli_wages"])[:10],
             str(calc["epf_contri"])[:10],

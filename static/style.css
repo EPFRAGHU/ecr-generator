@@ -194,6 +194,27 @@
     color: var(--pencil);
     font-style: italic;
   }
+  table.ledger .split-col{ display: none; }
+  table.ledger.split-month .split-col{ display: table-cell; }
+  .cell-select{
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 12px;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--rule);
+    padding: 2px 4px;
+  }
+  .calc-note{
+    display: block;
+    font-size: 10px;
+    color: var(--pencil);
+    font-style: italic;
+  }
+  .stub-ceiling{
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
+  }
   td.rownum{
     color: var(--pencil);
     font-family: 'IBM Plex Mono', monospace;

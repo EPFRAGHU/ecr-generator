@@ -13,14 +13,48 @@ let pendingUploadFile = null; // held between the "needs_mapping" round trip and
 
 const fmt = n => Math.round(Number(n)||0).toLocaleString('en-IN');
 
+// Wage ceiling revised 15,000 -> 25,000 by S.O. 5109(E), w.e.f. 17.09.2026.
+// September 2026 is split: days 1-16 at the old ceiling, 17-30 at the new
+// one (EPFO FAQ Q7/Q9). Keep in sync with calc_row() in app.py.
+const OLD_CEILING = 15000, NEW_CEILING = 25000, SPLIT_MONTH = '2026-09';
+const SPLIT_BEFORE = 16/30, SPLIT_AFTER = 14/30;
+
+const SEP_BASES = {
+  cap:   'EPS member, capped ₹15,000 till 16th',
+  full:  'EPS member, on full wages till 16th',
+  noeps: 'EPF only till 16th, joins EPS 17th',
+  new:   'Newly covered from 17th',
+};
+
+const roundHalfUp = x => Math.floor(x + 0.5 + 1e-9);
+const wageMonth = () => document.getElementById('wage-month').value;
+const ceilingFor = month => (month || '') > SPLIT_MONTH ? NEW_CEILING : OLD_CEILING;
+
 function calc(row){
-  const epf = Number(row.epf)||0;
-  const eps = Math.min(epf, 15000);
-  const edli = Math.min(epf, 15000);
-  const epfContri = Math.round(epf*0.12);
-  const epsContri = Math.round(eps*0.0833);
-  const diff = epfContri - epsContri;
-  return {eps, edli, epfContri, epsContri, diff};
+  const w = Number(row.epf)||0;
+  const month = wageMonth();
+  const epsMember = row.eps !== 'N';
+  let epfW, epsW, edliW;
+  if(month === SPLIT_MONTH){
+    const old = Math.min(w, OLD_CEILING), neu = Math.min(w, NEW_CEILING);
+    const split = old*SPLIT_BEFORE + neu*SPLIT_AFTER;
+    if(!epsMember){ epfW = w; epsW = 0; edliW = split; }
+    else if(row.sep === 'new'){ epfW = epsW = edliW = neu*SPLIT_AFTER; }
+    else if(row.sep === 'noeps'){ epfW = w; epsW = neu*SPLIT_AFTER; edliW = split; }
+    else if(row.sep === 'full'){ epfW = w; epsW = edliW = split; }
+    else { epfW = epsW = edliW = split; }
+  }else{
+    const ceiling = ceilingFor(month);
+    epfW = w;
+    epsW = epsMember ? Math.min(w, ceiling) : 0;
+    edliW = Math.min(w, ceiling);
+  }
+  const epfContri = roundHalfUp(epfW*0.12);
+  const epsContri = roundHalfUp(epsW*0.0833);
+  return {
+    epfW: roundHalfUp(epfW), eps: roundHalfUp(epsW), edli: roundHalfUp(edliW),
+    epfContri, epsContri, diff: epfContri - epsContri,
+  };
 }
 
 function isValidUAN(uan){ return /^\d{12}$/.test(String(uan||'').trim()); }
@@ -29,17 +63,27 @@ function isValidUAN(uan){ return /^\d{12}$/.test(String(uan||'').trim()); }
 function renderWageTable(){
   const tbody = document.getElementById('wage-tbody');
   tbody.innerHTML = '';
+  const isSplit = wageMonth() === SPLIT_MONTH;
+  document.getElementById('wage-table').classList.toggle('split-month', isSplit);
   wageRows.forEach((row, i)=>{
     const c = calc(row);
     const uanBad = !isValidUAN(row.uan);
     const tr = document.createElement('tr');
     if(uanBad) tr.classList.add('issue-row');
+    const epsOpts = [['Y','Yes'],['N','No']].map(([v,l])=>
+      `<option value="${v}" ${(row.eps||'Y')===v?'selected':''}>${l}</option>`).join('');
+    const sepOpts = Object.entries(SEP_BASES).map(([v,l])=>
+      `<option value="${v}" ${(row.sep||'cap')===v?'selected':''}>${l}</option>`).join('');
+    const epfNote = c.epfW !== Math.round(Number(row.epf)||0)
+      ? `<span class="calc-note">ECR: ${fmt(c.epfW)}</span>` : '';
     tr.innerHTML = `
       <td class="rownum">${i+1}</td>
       <td class="left editable" contenteditable="true" data-field="uan" data-i="${i}">${row.uan}${uanBad ? '<span class="issue-note">not 12 digits</span>' : ''}</td>
       <td class="left editable" contenteditable="true" data-field="name" data-i="${i}">${row.name}</td>
       <td class="editable" contenteditable="true" data-field="gross" data-i="${i}">${row.gross}</td>
-      <td class="editable" contenteditable="true" data-field="epf" data-i="${i}">${row.epf}</td>
+      <td class="editable" contenteditable="true" data-field="epf" data-i="${i}">${row.epf}${epfNote}</td>
+      <td><select class="cell-select" data-sfield="eps" data-i="${i}">${epsOpts}</select></td>
+      <td class="split-col"><select class="cell-select" data-sfield="sep" data-i="${i}" ${row.eps==='N'?'disabled':''}>${sepOpts}</select></td>
       <td class="calc">${fmt(c.eps)}</td>
       <td class="calc">${fmt(c.edli)}</td>
       <td class="calc">${fmt(c.epfContri)}</td>
@@ -56,6 +100,13 @@ function renderWageTable(){
   tbody.querySelectorAll('.editable').forEach(cell=>{
     cell.addEventListener('blur', onWageEdit);
   });
+  tbody.querySelectorAll('.cell-select').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      wageRows[Number(sel.dataset.i)][sel.dataset.sfield] = sel.value;
+      renderWageTable();
+      renderStub();
+    });
+  });
   tbody.querySelectorAll('.del-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       wageRows.splice(Number(btn.dataset.del),1);
@@ -68,7 +119,8 @@ function renderWageTable(){
 function onWageEdit(e){
   const i = Number(e.target.dataset.i);
   const field = e.target.dataset.field;
-  let val = e.target.textContent.replace('not 12 digits','').trim();
+  const note = e.target.querySelector('.issue-note, .calc-note');
+  let val = e.target.textContent.replace(note ? note.textContent : '', '').trim();
   if(['gross','epf','ncp','refund'].includes(field)){ val = Number(val)||0; }
   wageRows[i][field] = val;
   renderWageTable();
@@ -122,7 +174,7 @@ function renderStub(){
   wageRows.forEach(row=>{
     const c = calc(row);
     gross += Number(row.gross)||0;
-    epfw += Number(row.epf)||0;
+    epfw += c.epfW;
     epsw += c.eps;
     edliw += c.edli;
     ac1ee += c.epfContri;
@@ -159,6 +211,9 @@ function renderStub(){
     const monthName = new Date(monthVal+'-01').toLocaleString('en-IN',{month:'long', year:'numeric'});
     document.querySelector('.stub-top h3').textContent = monthName;
   }
+  document.getElementById('stub-ceiling').textContent = monthVal === SPLIT_MONTH
+    ? 'Wage ceiling: ₹15,000 for 1–16 Sep, ₹25,000 from 17 Sep (S.O. 5109(E))'
+    : `Wage ceiling: ₹${fmt(ceilingFor(monthVal))}`;
 }
 
 function showToast(msg){
@@ -180,7 +235,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 });
 
 document.getElementById('add-row-btn').addEventListener('click', ()=>{
-  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, refund:0});
+  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, refund:0, eps:'Y', sep:'cap'});
   renderWageTable();
   renderStub();
 });
@@ -190,7 +245,10 @@ document.getElementById('add-exit-btn').addEventListener('click', ()=>{
   renderExitTable();
 });
 document.getElementById('estab-code').addEventListener('input', renderStub);
-document.getElementById('wage-month').addEventListener('input', renderStub);
+document.getElementById('wage-month').addEventListener('input', ()=>{
+  renderWageTable();
+  renderStub();
+});
 
 // ---------- file upload ----------
 const uploadInput = document.getElementById('upload-input');
@@ -235,6 +293,7 @@ function importRows(rows, issues){
       uan: r.uan, name: r.name,
       gross: Number(r.gross)||0, epf: Number(r.epf)||0,
       ncp: Number(r.ncp)||0, refund: Number(r.refund)||0,
+      eps: 'Y', sep: 'cap',
     });
     if(issues && issues[i] && issues[i].length) badRows.push(i+1);
   });
