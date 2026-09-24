@@ -250,6 +250,86 @@ document.getElementById('wage-month').addEventListener('input', ()=>{
   renderStub();
 });
 
+// ---------- month picker fallback ----------
+// Firefox/Safari desktop render <input type="month"> as a plain text box,
+// so give them a picker like Chrome's. Value stays "YYYY-MM" either way.
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function setupMonthPicker(input){
+  input.type = 'text';
+  input.readOnly = true;
+  input.classList.add('month-fallback');
+  const wrap = document.createElement('div');
+  wrap.className = 'month-picker-wrap';
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+  const icon = document.createElement('button');
+  icon.type = 'button';
+  icon.className = 'month-picker-icon';
+  icon.setAttribute('aria-label', 'Choose month');
+  icon.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M2 6.5h12M5 1.5v3M11 1.5v3" stroke="currentColor" stroke-width="1.5"/></svg>';
+  wrap.appendChild(icon);
+  const pop = document.createElement('div');
+  pop.className = 'month-picker';
+  wrap.appendChild(pop);
+
+  let viewYear;
+  const current = () => {
+    const m = /^(\d{4})-(\d{2})$/.exec(input.value);
+    return m ? {y: Number(m[1]), m: Number(m[2])} : null;
+  };
+  const setValue = val => {
+    input.value = val;
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+    close();
+  };
+  function render(){
+    const cur = current();
+    pop.innerHTML = `
+      <div class="mp-head">
+        <button type="button" class="mp-nav" data-step="-1" aria-label="Previous year">‹</button>
+        <span class="mp-year">${viewYear}</span>
+        <button type="button" class="mp-nav" data-step="1" aria-label="Next year">›</button>
+      </div>
+      <div class="mp-grid">${MONTHS.map((name, i)=>{
+        const sel = cur && cur.y === viewYear && cur.m === i+1 ? ' selected' : '';
+        return `<button type="button" class="mp-month${sel}" data-m="${i+1}">${name}</button>`;
+      }).join('')}</div>
+      <div class="mp-foot">
+        <button type="button" class="mp-link" data-act="clear">Clear</button>
+        <button type="button" class="mp-link" data-act="today">This month</button>
+      </div>`;
+  }
+  function open(){
+    const cur = current();
+    viewYear = cur ? cur.y : new Date().getFullYear();
+    render();
+    pop.classList.add('show');
+  }
+  function close(){ pop.classList.remove('show'); }
+
+  input.addEventListener('click', ()=> pop.classList.contains('show') ? close() : open());
+  icon.addEventListener('click', ()=> pop.classList.contains('show') ? close() : open());
+  pop.addEventListener('click', e=>{
+    const btn = e.target.closest('button');
+    if(!btn) return;
+    if(btn.dataset.step){ viewYear += Number(btn.dataset.step); render(); }
+    else if(btn.dataset.m){ setValue(`${viewYear}-${String(btn.dataset.m).padStart(2,'0')}`); }
+    else if(btn.dataset.act === 'clear'){ setValue(''); }
+    else if(btn.dataset.act === 'today'){
+      const d = new Date();
+      setValue(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    }
+  });
+  document.addEventListener('click', e=>{ if(!wrap.contains(e.target)) close(); });
+  document.addEventListener('keydown', e=>{ if(e.key === 'Escape') close(); });
+}
+
+{
+  const monthInput = document.getElementById('wage-month');
+  if(monthInput.type !== 'month') setupMonthPicker(monthInput);
+}
+
 // ---------- file upload ----------
 const uploadInput = document.getElementById('upload-input');
 document.getElementById('upload-btn').addEventListener('click', ()=> uploadInput.click());
