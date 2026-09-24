@@ -311,6 +311,9 @@ function setupMonthPicker(input){
   input.addEventListener('click', ()=> pop.classList.contains('show') ? close() : open());
   icon.addEventListener('click', ()=> pop.classList.contains('show') ? close() : open());
   pop.addEventListener('click', e=>{
+    // render() replaces the clicked button, so the document "click outside"
+    // check would no longer find it inside wrap and close the picker.
+    e.stopPropagation();
     const btn = e.target.closest('button');
     if(!btn) return;
     if(btn.dataset.step){ viewYear += Number(btn.dataset.step); render(); }
