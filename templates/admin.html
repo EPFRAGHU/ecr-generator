@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Visitors — EPFO Monthly ECR Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="masthead">
+  <div>
+    <h1>EPFO Monthly ECR Generator</h1>
+    <p class="sub">Visitors &amp; registrations</p>
+  </div>
+  <div class="masthead-right">
+    <div class="office">Admin</div>
+    <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+      <button type="submit" class="mp-link">Log out</button>
+    </form>
+  </div>
+</div>
+
+<div class="admin-wrap">
+  <div class="tiles">
+    <div class="tile"><div class="num">{{ stats.page_views }}</div><div class="lbl">Page views</div></div>
+    <div class="tile"><div class="num">{{ stats.unique_visitors }}</div><div class="lbl">Unique visitors</div></div>
+    <div class="tile"><div class="num">{{ stats.registered }}</div><div class="lbl">Registered</div></div>
+    <div class="tile"><div class="num">{{ stats.ecr_files }}</div><div class="lbl">ECR files made</div></div>
+    <div class="tile"><div class="num">{{ stats.exit_files }}</div><div class="lbl">Exit files made</div></div>
+  </div>
+
+  <div class="admin-bar">
+    <h2>Registered users ({{ people|length }})</h2>
+    <div class="admin-actions">
+      <a class="btn" href="{{ url_for('admin_export') }}">Download CSV</a>
+    </div>
+  </div>
+
+  <div class="admin-table-wrap">
+    {% if people %}
+    <table class="ledger admin-table">
+      <thead>
+        <tr>
+          <th class="left">#</th>
+          <th class="left">Name</th>
+          <th class="left">Mobile</th>
+          <th class="left">Email</th>
+          <th class="left">Registered (IST)</th>
+          <th class="left">Last visit (IST)</th>
+          <th>Views</th>
+          <th>ECR files</th>
+          <th>Exit files</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in people %}
+        <tr>
+          <td class="rownum">{{ loop.index }}</td>
+          <td class="left">{{ p.name }}</td>
+          <td class="left"><a href="tel:+91{{ p.mobile }}">{{ p.mobile }}</a></td>
+          <td class="left"><a href="mailto:{{ p.email }}">{{ p.email }}</a></td>
+          <td class="left">{{ p.created }}</td>
+          <td class="left">{{ p.last }}</td>
+          <td>{{ p.views }}</td>
+          <td>{{ p.ecr_files }}</td>
+          <td>{{ p.exit_files }}</td>
+          <td class="delete-cell">
+            <form method="post" action="{{ url_for('admin_delete', reg_id=p.id) }}"
+                  onsubmit="return confirm('Delete this person\'s details? This cannot be undone.');">
+              <button type="submit" class="del-btn" title="Delete this person's details">×</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="admin-empty">No registrations yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+</body>
+</html>

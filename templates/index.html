@@ -8,7 +8,38 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="{{ '' if registered else 'gated' }}">
+
+<div class="reg-gate" id="reg-gate" role="dialog" aria-modal="true" aria-labelledby="reg-title">
+  <form class="reg-card" id="reg-form" novalidate>
+    <div class="eyebrow">FREE TO USE</div>
+    <h2 id="reg-title">Register to use the ECR Generator</h2>
+    <p class="reg-sub">One-time sign-up. You won't be asked again on this device.</p>
+    <div class="field">
+      <label for="reg-name">Your name</label>
+      <input id="reg-name" name="name" type="text" autocomplete="name" maxlength="80" required>
+      <span class="reg-err" data-err="name"></span>
+    </div>
+    <div class="field">
+      <label for="reg-mobile">Mobile number</label>
+      <input id="reg-mobile" name="mobile" type="tel" inputmode="numeric" autocomplete="tel" maxlength="14" placeholder="10-digit mobile" required>
+      <span class="reg-err" data-err="mobile"></span>
+    </div>
+    <div class="field">
+      <label for="reg-email">Email</label>
+      <input id="reg-email" name="email" type="email" autocomplete="email" maxlength="120" required>
+      <span class="reg-err" data-err="email"></span>
+    </div>
+    <input class="reg-hp" name="website" type="text" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <label class="reg-consent">
+      <input id="reg-consent" type="checkbox">
+      <span>I agree that my name, mobile number and email are stored so the developer knows who uses this tool and can contact me about updates to it. They are not shared with anyone. Wage data I enter is never saved.</span>
+    </label>
+    <span class="reg-err" data-err="consent"></span>
+    <p class="reg-err reg-err-main" id="reg-error"></p>
+    <button class="btn-generate" type="submit" id="reg-submit">Continue to the app</button>
+  </form>
+</div>
 
 <div class="masthead">
   <div>
@@ -18,7 +49,7 @@
   <div class="masthead-right">
     <div class="office">Developed by Raghunatha Maharana, EO, EPFO, District Office, Cuttack, Odisha</div>
     <div class="office">Employer Module</div>
-    <div>Data stays in this session — nothing is saved on the server</div>
+    <div>Wage data stays in your browser — it is never saved on the server</div>
   </div>
 </div>
 

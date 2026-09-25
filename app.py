@@ -5,21 +5,273 @@ Reproduces the logic of ECRfile_Template_v2_1.xlsm (Sheet1 formulas +
 TEXTFILE / TEXTSUB macros) as HTTP endpoints, so the browser-side ledger
 can generate the same #~#-delimited ECR / Exit text files EPFO expects.
 
-No database — stateless, one session's worth of data per request, same
-as the original Excel macro (open file, fill sheet, click button, get
-a .txt file).
+Wage data is stateless — one session's worth per request, same as the
+original Excel macro (open file, fill sheet, click button, get a .txt
+file). Visitors register (name, mobile, email) before they can generate
+files; registrations and usage counts live in SQLite (see visitors.py)
+and are viewed at /admin.
 """
 from __future__ import annotations
 
+import csv
+import hashlib
+import hmac
 import io
 import math
+import os
 import re
-from datetime import datetime
+import secrets
+import time
+from datetime import datetime, timedelta, timezone
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash
+
+import visitors
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8MB upload cap
+# Behind Coolify's proxy: trust one hop for client IP / scheme.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+visitors.init_db()
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+# ---------------------------------------------------------------------------
+# Admin login — protects /admin (the visitor list). Credentials from
+# environment (set in Coolify):
+#   ECR_USERNAME        user ID
+#   ECR_PASSWORD_HASH   werkzeug password hash (preferred), or
+#   ECR_PASSWORD        plain password
+#   SECRET_KEY          session signing key (recommended)
+# If no credentials are configured, /admin stays locked.
+# ---------------------------------------------------------------------------
+LOGIN_USERNAME = os.environ.get("ECR_USERNAME", "").strip()
+LOGIN_PASSWORD_HASH = os.environ.get("ECR_PASSWORD_HASH", "").strip()
+LOGIN_PASSWORD = os.environ.get("ECR_PASSWORD", "")
+LOGIN_CONFIGURED = bool(LOGIN_USERNAME and (LOGIN_PASSWORD_HASH or LOGIN_PASSWORD))
+
+app.secret_key = os.environ.get("SECRET_KEY") or hashlib.sha256(
+    ("ecr-generator-session:" + LOGIN_PASSWORD_HASH + LOGIN_PASSWORD).encode()
+).hexdigest()
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    # Long-lived so registered visitors aren't asked again; admin access
+    # expires separately after ADMIN_SESSION_SECONDS.
+    PERMANENT_SESSION_LIFETIME=timedelta(days=365),
+)
+ADMIN_SESSION_SECONDS = 8 * 60 * 60
+
+MAX_FAILED_LOGINS = 5
+LOCKOUT_SECONDS = 15 * 60
+_failed_logins: dict[str, list[float]] = {}  # client IP -> failure timestamps
+
+MAX_REGISTRATIONS_PER_HOUR = 10
+_registrations_by_ip: dict[str, list[float]] = {}
+
+ADMIN_ENDPOINTS = {"admin", "admin_export", "admin_delete"}
+REGISTERED_ENDPOINTS = {"upload", "generate_ecr", "generate_exit"}
+
+
+def _recent(log: dict[str, list[float]], ip: str, window: float) -> list[float]:
+    cutoff = time.time() - window
+    recent = [t for t in log.get(ip, []) if t > cutoff]
+    log[ip] = recent
+    return recent
+
+
+def _recent_failures(ip: str) -> list[float]:
+    return _recent(_failed_logins, ip, LOCKOUT_SECONDS)
+
+
+def _is_admin() -> bool:
+    return session.get("admin_until", 0) > time.time()
+
+
+def _current_reg_id() -> int | None:
+    reg_id = session.get("reg_id")
+    return reg_id if visitors.registration_exists(reg_id) else None
+
+
+def _visitor_id() -> str:
+    if "vid" not in session:
+        session.permanent = True
+        session["vid"] = secrets.token_hex(8)
+    return session["vid"]
+
+
+def _log(kind: str) -> None:
+    visitors.log_event(_visitor_id(), _current_reg_id(), kind)
+
+
+def _credentials_ok(username: str, password: str) -> bool:
+    user_ok = hmac.compare_digest(username.encode(), LOGIN_USERNAME.encode())
+    if LOGIN_PASSWORD_HASH:
+        pass_ok = check_password_hash(LOGIN_PASSWORD_HASH, password)
+    else:
+        pass_ok = hmac.compare_digest(password.encode(), LOGIN_PASSWORD.encode())
+    return user_ok and pass_ok
+
+
+def _safe_next(target: str | None) -> str:
+    if target and target.startswith("/") and not target.startswith("//"):
+        return target
+    return url_for("admin")
+
+
+@app.before_request
+def gate():
+    if request.endpoint in ADMIN_ENDPOINTS and not _is_admin():
+        return redirect(url_for("login", next=request.path))
+    if request.endpoint in REGISTERED_ENDPOINTS and _current_reg_id() is None:
+        return jsonify(
+            {"error": "Please register to use the ECR generator", "needs_registration": True}
+        ), 403
+    return None
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if not LOGIN_CONFIGURED:
+        return render_template(
+            "login.html", error="Admin login is not configured on the server."
+        ), 503
+
+    error = None
+    if request.method == "POST":
+        ip = request.remote_addr or "unknown"
+        if len(_recent_failures(ip)) >= MAX_FAILED_LOGINS:
+            error = "Too many failed attempts. Try again in 15 minutes."
+        elif _credentials_ok(
+            request.form.get("username", "").strip(), request.form.get("password", "")
+        ):
+            _failed_logins.pop(ip, None)
+            session.permanent = True
+            session["admin_until"] = time.time() + ADMIN_SESSION_SECONDS
+            return redirect(_safe_next(request.form.get("next")))
+        else:
+            _failed_logins.setdefault(ip, []).append(time.time())
+            error = "Incorrect user ID or password."
+    return render_template(
+        "login.html", error=error, next=request.values.get("next", "")
+    )
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.pop("admin_until", None)
+    return redirect(url_for("login"))
+
+
+# ---------------------------------------------------------------------------
+# Visitor registration
+# ---------------------------------------------------------------------------
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _clean_mobile(raw: str) -> str | None:
+    digits = re.sub(r"\D", "", raw or "")
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    return digits if re.fullmatch(r"[6-9]\d{9}", digits) else None
+
+
+@app.route("/api/register", methods=["POST"])
+def register():
+    data = request.get_json(silent=True) or {}
+    if data.get("website"):  # honeypot field, hidden from people
+        return jsonify({"error": "Registration failed"}), 400
+
+    name = re.sub(r"\s+", " ", str(data.get("name", ""))).strip()
+    mobile = _clean_mobile(str(data.get("mobile", "")))
+    email = str(data.get("email", "")).strip().lower()
+
+    errors = {}
+    if not 2 <= len(name) <= 80:
+        errors["name"] = "Enter your name"
+    if mobile is None:
+        errors["mobile"] = "Enter a valid 10-digit mobile number"
+    if len(email) > 120 or not EMAIL_RE.match(email):
+        errors["email"] = "Enter a valid email address"
+    if data.get("consent") is not True:
+        errors["consent"] = "Please tick the box to continue"
+    if errors:
+        return jsonify({"error": "Please check the highlighted fields", "fields": errors}), 400
+
+    ip = request.remote_addr or "unknown"
+    if len(_recent(_registrations_by_ip, ip, 3600)) >= MAX_REGISTRATIONS_PER_HOUR:
+        return jsonify({"error": "Too many registrations from this network. Try later."}), 429
+    _registrations_by_ip.setdefault(ip, []).append(time.time())
+
+    reg_id = visitors.register(name, mobile, email)
+    session.permanent = True
+    session["reg_id"] = reg_id
+    _log("register")
+    return jsonify({"status": "ok", "name": name})
+
+
+# ---------------------------------------------------------------------------
+# Admin: visitor list
+# ---------------------------------------------------------------------------
+def _ist(ts) -> str:
+    if not ts:
+        return "—"
+    return datetime.fromtimestamp(ts, IST).strftime("%d-%m-%Y %H:%M")
+
+
+@app.route("/admin")
+def admin():
+    people = visitors.list_registrations()
+    for p in people:
+        p["created"] = _ist(p["created_at"])
+        p["last"] = _ist(p["last_seen"])
+    return render_template("admin.html", stats=visitors.stats(), people=people)
+
+
+def _csv_safe(value) -> str:
+    # Stop spreadsheet apps from treating a cell as a formula.
+    text = str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
+@app.route("/admin/export.csv")
+def admin_export():
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(
+        ["Name", "Mobile", "Email", "Registered (IST)", "Last visit (IST)",
+         "Page views", "ECR files", "Exit files"]
+    )
+    for p in visitors.list_registrations():
+        writer.writerow([
+            _csv_safe(p["name"]), p["mobile"], _csv_safe(p["email"]),
+            _ist(p["created_at"]), _ist(p["last_seen"]),
+            p["views"], p["ecr_files"], p["exit_files"],
+        ])
+    buf = io.BytesIO(out.getvalue().encode("utf-8-sig"))  # BOM so Excel reads UTF-8
+    stamp = datetime.now(IST).strftime("%Y%m%d")
+    return send_file(buf, mimetype="text/csv", as_attachment=True,
+                     download_name=f"ecr-generator-visitors-{stamp}.csv")
+
+
+@app.route("/admin/delete/<int:reg_id>", methods=["POST"])
+def admin_delete(reg_id: int):
+    visitors.delete_registration(reg_id)
+    return redirect(url_for("admin"))
 
 # ---------------------------------------------------------------------------
 # Column auto-detection for uploaded Excel/CSV files
@@ -164,7 +416,8 @@ def validate_wage_row(row: dict) -> list[str]:
 # ---------------------------------------------------------------------------
 @app.route("/")
 def index():
-    return render_template("index.html")
+    _log("view")
+    return render_template("index.html", registered=_current_reg_id() is not None)
 
 
 @app.route("/api/upload", methods=["POST"])
@@ -235,6 +488,7 @@ def upload():
         rows.append(row)
         issues_by_row.append(validate_wage_row(row))
 
+    _log("upload")
     return jsonify(
         {
             "status": "ok",
@@ -285,6 +539,7 @@ def generate_ecr():
     buf = io.BytesIO(content.encode("utf-8"))
     buf.seek(0)
     filename = f"{estab_code}{year}{month}.txt"
+    _log("ecr")
     return send_file(
         buf,
         mimetype="text/plain",
@@ -328,6 +583,7 @@ def generate_exit():
     buf = io.BytesIO(content.encode("utf-8"))
     buf.seek(0)
     filename = f"{estab_code}{year}{month}exit.txt"
+    _log("exit")
     return send_file(
         buf,
         mimetype="text/plain",

@@ -216,6 +216,58 @@ function renderStub(){
     : `Wage ceiling: ₹${fmt(ceilingFor(monthVal))}`;
 }
 
+// ---------- registration gate ----------
+// Server refuses uploads / file generation (403) until the visitor registers.
+function showRegistrationGate(){
+  document.body.classList.add('gated');
+  document.getElementById('reg-name').focus();
+}
+
+function handleNeedsRegistration(resp){
+  if(resp.status !== 403) return false;
+  showRegistrationGate();
+  return true;
+}
+
+document.getElementById('reg-form').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const form = e.target;
+  form.querySelectorAll('.reg-err').forEach(el=>{ el.textContent = ''; });
+  const btn = document.getElementById('reg-submit');
+  btn.disabled = true;
+  const payload = {
+    name: document.getElementById('reg-name').value,
+    mobile: document.getElementById('reg-mobile').value,
+    email: document.getElementById('reg-email').value,
+    website: form.elements.namedItem('website').value,
+    consent: document.getElementById('reg-consent').checked,
+  };
+  let resp, data;
+  try{
+    resp = await fetch('/api/register', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    data = await resp.json().catch(()=>({}));
+  }catch(err){
+    document.getElementById('reg-error').textContent = 'Could not reach the server — please try again';
+    btn.disabled = false;
+    return;
+  }
+  btn.disabled = false;
+  if(!resp.ok){
+    Object.entries(data.fields || {}).forEach(([field, msg])=>{
+      const el = form.querySelector(`[data-err="${field}"]`);
+      if(el) el.textContent = msg;
+    });
+    document.getElementById('reg-error').textContent = data.error || 'Registration failed';
+    return;
+  }
+  document.body.classList.remove('gated');
+  showToast(`Welcome, ${data.name}!`);
+});
+
 function showToast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -356,6 +408,7 @@ async function attemptUpload(file, mapping){
     showToast('Upload failed — could not reach the server');
     return;
   }
+  if(handleNeedsRegistration(resp)) return;
   if(!resp.ok){
     const err = await resp.json().catch(()=>({error:'Upload failed'}));
     showToast(err.error || 'Upload failed');
@@ -458,6 +511,7 @@ async function downloadGenerated(url, payload, fallbackName){
     showToast('Could not reach the server');
     return;
   }
+  if(handleNeedsRegistration(resp)) return;
   if(!resp.ok){
     const err = await resp.json().catch(()=>({error:'Generation failed'}));
     showToast(err.error || 'Generation failed');

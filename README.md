@@ -38,7 +38,30 @@ Same pattern as `ecr-viewer` and `est_master`:
    pattern as your other tools.
 6. Deploy.
 
-No database connection to wire up — there's nothing to point at Neon here.
+## Visitor registration and admin page
+
+Anyone can open the site, but they must register (name, mobile, email and a
+consent tick) before they can upload a sheet or generate a file. The server
+enforces this, not just the page. Registrations and usage counts (page views,
+uploads, ECR and exit files) are stored in SQLite at `$DATA_DIR/visitors.db`.
+Wage data is never stored.
+
+`/admin` shows totals, the list of registered people, a CSV download and a
+delete button (removes that person's details). It needs the admin login.
+
+Set these in Coolify (Configuration → Environment Variables) and redeploy:
+
+| Variable | Purpose |
+|---|---|
+| `DATA_DIR` | `/data` — **also add a Persistent Storage volume mounted at `/data`**, or registrations are lost on every redeploy |
+| `ECR_USERNAME` | Admin user ID |
+| `ECR_PASSWORD_HASH` | Admin password hash (preferred) — generate with `python -c "from werkzeug.security import generate_password_hash as g; print(g(input('Password: ')))"` |
+| `ECR_PASSWORD` | Plain admin password (only if not using the hash) |
+| `SECRET_KEY` | Long random string for signing the session cookie, e.g. `python -c "import secrets; print(secrets.token_hex(32))"` |
+
+If no admin user ID/password is set, `/admin` stays locked. Admin sessions
+last 8 hours; 5 wrong passwords from one IP lock logins from it for 15
+minutes. Visitors stay registered on their device for a year.
 
 ## What it does
 
