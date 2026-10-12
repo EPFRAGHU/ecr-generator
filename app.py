@@ -13,6 +13,7 @@ and are viewed at /admin.
 """
 from __future__ import annotations
 
+import calendar
 import csv
 import hashlib
 import hmac
@@ -282,10 +283,11 @@ FIELD_SYNONYMS = {
     "gross": ["gross wages", "gross wage", "gross salary", "gross"],
     "epf": ["epf wages", "epf wage", "pf wages", "basic wages", "epf basic"],
     "ncp": ["ncp days", "ncp", "lop days", "loss of pay days"],
+    "vpf": ["vpf", "vpf amount", "voluntary pf", "voluntary provident fund"],
     "refund": ["refund of advances", "refund", "advance refund", "refund advance"],
 }
 REQUIRED_FIELDS = ["uan", "name", "gross", "epf"]
-OPTIONAL_FIELDS = ["ncp", "refund"]
+OPTIONAL_FIELDS = ["ncp", "vpf", "refund"]
 
 
 def _normalize_header(h: str) -> str:
@@ -340,13 +342,19 @@ def ceiling_for(wage_month: str) -> int:
     return NEW_CEILING if (wage_month or "") > SPLIT_MONTH else OLD_CEILING
 
 
-def calc_row(epf, wage_month="", eps_member=True, sep_basis="cap", higher=True) -> dict:
+def calc_row(
+    epf, wage_month="", eps_member=True, sep_basis="cap", higher=True, vpf=0
+) -> dict:
     """
     `epf` is the member's full-month EPF wages. EPF wages are capped at the
     ceiling (15,000 up to 16.09.2026, 25,000 from 17.09.2026) unless `higher`
     is set, in which case EPF is on the actual wage. EPS and EDLI wages are
     always capped, so the excess employer share goes to the EPF diff. In
     September 2026 the wage is split per `sep_basis`.
+
+    `vpf` is the voluntary PF amount in rupees. It is remitted with the
+    employee share, so it is added to the EPF contribution but not to the
+    employer's diff.
     """
     w = float(epf or 0)
     if wage_month == SPLIT_MONTH:
@@ -372,16 +380,44 @@ def calc_row(epf, wage_month="", eps_member=True, sep_basis="cap", higher=True) 
         eps_w = min(w, ceiling) if eps_member else 0.0
         edli_w = min(w, ceiling)
 
-    epf_contri = round_half_up(epf_w * 0.12)
+    base_contri = round_half_up(epf_w * 0.12)
     eps_contri = round_half_up(eps_w * 0.0833)
     return {
         "epf_wages": round_half_up(epf_w),
         "eps_wages": round_half_up(eps_w),
         "edli_wages": round_half_up(edli_w),
-        "epf_contri": epf_contri,
+        "epf_contri": base_contri + round_half_up(float(vpf or 0)),
         "eps_contri": eps_contri,
-        "diff": epf_contri - eps_contri,
+        "diff": base_contri - eps_contri,
     }
+
+
+def days_in_month(wage_month: str) -> int:
+    try:
+        year, month = (int(p) for p in str(wage_month).split("-"))
+        return calendar.monthrange(year, month)[1]
+    except (TypeError, ValueError):
+        return 31
+
+
+# Keep ncp_issue / vpf_issue in sync with ncpIssue / vpfIssue in static/app.js.
+def ncp_issue(ncp, wage_month: str) -> str:
+    s = str(ncp if ncp is not None else "").strip()
+    if s in ("", "0"):
+        return ""
+    if not re.fullmatch(r"\d+", s):
+        return "NCP days must be whole days"
+    max_days = days_in_month(wage_month)
+    if int(s) > max_days:
+        return f"NCP days cannot exceed {max_days}"
+    return ""
+
+
+def vpf_issue(vpf) -> str:
+    s = str(vpf if vpf is not None else "").strip()
+    if s in ("", "0"):
+        return ""
+    return "" if re.fullmatch(r"\d+(\.\d+)?", s) else "VPF is not a valid amount"
 
 
 def row_eps_member(row: dict) -> bool:
@@ -411,7 +447,17 @@ def validate_wage_row(row: dict) -> list[str]:
             issues.append("EPF wages exceed gross wages")
     except (TypeError, ValueError):
         issues.append("Gross/EPF wages are not numeric")
+    # The wage month isn't known at upload time; the page re-checks NCP days
+    # against the chosen month.
+    for issue in (ncp_issue(row.get("ncp"), ""), vpf_issue(row.get("vpf"))):
+        if issue:
+            issues.append(issue)
     return issues
+
+
+def _whole_number_text(val: str) -> str:
+    # Excel numbers often arrive as "4.0"; keep them as "4".
+    return re.sub(r"^(\d+)\.0+$", r"\1", val)
 
 
 # ---------------------------------------------------------------------------
@@ -485,7 +531,8 @@ def upload():
             "name": get("name"),
             "gross": get("gross") or "0",
             "epf": get("epf") or "0",
-            "ncp": get("ncp") or "0",
+            "ncp": _whole_number_text(get("ncp")) or "0",
+            "vpf": _whole_number_text(get("vpf")) or "0",
             "refund": get("refund") or "0",
         }
         rows.append(row)
@@ -514,15 +561,25 @@ def generate_ecr():
 
     year, month = wage_month.split("-")
 
+    for n, row in enumerate(rows, start=1):
+        issue = ncp_issue(row.get("ncp"), wage_month) or vpf_issue(row.get("vpf"))
+        if issue:
+            return jsonify({"error": f"Row {n}: {issue}"}), 400
+
     lines = []
     d = "#~#"
     for row in rows:
         gross = float(row.get("gross") or 0)
         epf = float(row.get("epf") or 0)
         calc = calc_row(
-            epf, wage_month, row_eps_member(row), row_sep_basis(row), row_higher_epf(row)
+            epf,
+            wage_month,
+            row_eps_member(row),
+            row_sep_basis(row),
+            row_higher_epf(row),
+            float(row.get("vpf") or 0),
         )
-        ncp = row.get("ncp") or 0
+        ncp = int(row.get("ncp") or 0)
         refund = row.get("refund") or 0
 
         dd = [
@@ -535,7 +592,7 @@ def generate_ecr():
             str(calc["epf_contri"])[:10],
             str(calc["eps_contri"])[:10],
             str(calc["diff"])[:10],
-            str(ncp)[:2] if float(ncp or 0) > 0 else "0",
+            str(ncp),
             str(refund)[:10] if float(refund or 0) > 0 else "0",
         ]
         lines.append(d.join(dd))

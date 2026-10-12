@@ -83,6 +83,14 @@ minutes. Visitors stay registered on their device for a year.
   the FAQ Q7 scenario: EPS member throughout (C), EPF-only joining EPS on
   17 Sep (B), or newly covered from 17 Sep (A). Enter the full-month EPF
   wage; the figure written to the ECR is shown under it when it differs.
+- **NCP days** — entered per member next to EPF wages (or uploaded from an
+  "NCP days" / "LOP days" column). Whole days only, from 0 up to the
+  number of days in the wage month; anything else highlights the row and
+  blocks generation.
+- **VPF** — voluntary PF per member, as a rupee amount (or uploaded from a
+  "VPF" / "Voluntary PF" column). It is added to the member's EPF
+  contribution in the ECR and to the A/c 1 employee share in the challan
+  summary. It does not change EPS or the employer's diff.
 - **Exit Register tab** — UAN, name (reference only), exit date, reason code.
 - **Challan summary panel** — live totals (Gross/EPF/EPS/EDLI wages, A/c 1/2/10/21/22),
   mirroring the Textmain sheet.

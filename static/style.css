@@ -304,6 +304,16 @@
     background: rgba(154,43,52,0.06);
     box-shadow: inset 0 -2px 0 var(--stamp);
   }
+  /* Short per-member inputs (NCP days, VPF): boxed so they read as fields */
+  td.editable.input-box{
+    min-width: 56px;
+    box-shadow: inset 0 0 0 1px var(--rule);
+  }
+  td.editable.input-box:focus{
+    box-shadow: inset 0 0 0 1px var(--rule), inset 0 -2px 0 var(--stamp);
+  }
+  .stub-row.note .lbl, .stub-row.note .val{ font-style: italic; opacity: .8; }
+  .stub-row[hidden]{ display: none; }
   td.calc{
     color: var(--pencil);
     font-style: italic;

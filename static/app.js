@@ -56,15 +56,43 @@ function calc(row){
     epsW = epsMember ? Math.min(w, ceiling) : 0;
     edliW = Math.min(w, ceiling);
   }
-  const epfContri = roundHalfUp(epfW*0.12);
+  // VPF is a voluntary employee contribution on top of the 12%. It is
+  // remitted with the employee share (ECR "EPF contribution", A/c 1) and
+  // does not change the employer's diff.
+  const baseContri = roundHalfUp(epfW*0.12);
+  const vpf = vpfIssue(row.vpf) ? 0 : roundHalfUp(Number(row.vpf)||0);
   const epsContri = roundHalfUp(epsW*0.0833);
   return {
     epfW: roundHalfUp(epfW), eps: roundHalfUp(epsW), edli: roundHalfUp(edliW),
-    epfContri, epsContri, diff: epfContri - epsContri,
+    vpf, epfContri: baseContri + vpf, epsContri, diff: baseContri - epsContri,
   };
 }
 
 function isValidUAN(uan){ return /^\d{12}$/.test(String(uan||'').trim()); }
+
+function daysInMonth(month){
+  const m = /^(\d{4})-(\d{2})$/.exec(month || '');
+  return m ? new Date(Number(m[1]), Number(m[2]), 0).getDate() : 31;
+}
+
+// NCP days: whole days, 0 up to the number of days in the wage month.
+// Keep in sync with ncp_issue() in app.py.
+function ncpIssue(ncp){
+  const s = String(ncp ?? '').trim();
+  if(s === '' || s === '0') return '';
+  if(!/^\d+$/.test(s)) return 'whole days only';
+  const max = daysInMonth(wageMonth());
+  return Number(s) > max ? `max ${max} days` : '';
+}
+
+// VPF: rupee amount, zero or more. Keep in sync with vpf_issue() in app.py.
+function vpfIssue(vpf){
+  const s = String(vpf ?? '').trim();
+  if(s === '' || s === '0') return '';
+  return /^\d+(\.\d+)?$/.test(s) ? '' : 'not a valid amount';
+}
+
+const rowHasIssue = row => !isValidUAN(row.uan) || !!ncpIssue(row.ncp) || !!vpfIssue(row.vpf);
 
 // ---------- wage table ----------
 function renderWageTable(){
@@ -75,8 +103,10 @@ function renderWageTable(){
   wageRows.forEach((row, i)=>{
     const c = calc(row);
     const uanBad = !isValidUAN(row.uan);
+    const ncpBad = ncpIssue(row.ncp);
+    const vpfBad = vpfIssue(row.vpf);
     const tr = document.createElement('tr');
-    if(uanBad) tr.classList.add('issue-row');
+    if(rowHasIssue(row)) tr.classList.add('issue-row');
     const epsOpts = [['Y','Yes'],['N','No']].map(([v,l])=>
       `<option value="${v}" ${(row.eps||'Y')===v?'selected':''}>${l}</option>`).join('');
     const higherOpts = [['Y','Yes'],['N','No']].map(([v,l])=>
@@ -91,6 +121,8 @@ function renderWageTable(){
       <td class="left editable" contenteditable="true" data-field="name" data-i="${i}">${row.name}</td>
       <td class="editable" contenteditable="true" data-field="gross" data-i="${i}">${row.gross}</td>
       <td class="editable" contenteditable="true" data-field="epf" data-i="${i}">${row.epf}${epfNote}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="numeric" data-field="ncp" data-i="${i}">${row.ncp ?? 0}${ncpBad ? `<span class="issue-note">${ncpBad}</span>` : ''}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="vpf" data-i="${i}">${row.vpf ?? 0}${vpfBad ? `<span class="issue-note">${vpfBad}</span>` : ''}</td>
       <td><select class="cell-select" data-sfield="higher" data-i="${i}">${higherOpts}</select></td>
       <td><select class="cell-select" data-sfield="eps" data-i="${i}">${epsOpts}</select></td>
       <td class="split-col"><select class="cell-select" data-sfield="sep" data-i="${i}" ${row.eps==='N'?'disabled':''}>${sepOpts}</select></td>
@@ -99,7 +131,6 @@ function renderWageTable(){
       <td class="calc">${fmt(c.epfContri)}</td>
       <td class="calc">${fmt(c.epsContri)}</td>
       <td class="calc">${fmt(c.diff)}</td>
-      <td class="editable" contenteditable="true" data-field="ncp" data-i="${i}">${row.ncp}</td>
       <td class="editable" contenteditable="true" data-field="refund" data-i="${i}">${row.refund}</td>
       <td class="delete-cell"><button class="del-btn" data-del="${i}">×</button></td>
     `;
@@ -131,7 +162,10 @@ function onWageEdit(e){
   const field = e.target.dataset.field;
   const note = e.target.querySelector('.issue-note, .calc-note');
   let val = e.target.textContent.replace(note ? note.textContent : '', '').trim();
-  if(['gross','epf','ncp','refund'].includes(field)){ val = Number(val)||0; }
+  if(['gross','epf','refund'].includes(field)){ val = Number(val)||0; }
+  // Keep a non-numeric NCP/VPF entry as typed so the row is flagged instead
+  // of silently becoming 0.
+  if(['ncp','vpf'].includes(field)){ val = val === '' ? 0 : (isNaN(Number(val)) ? val : Number(val)); }
   wageRows[i][field] = val;
   renderWageTable();
   renderStub();
@@ -180,10 +214,11 @@ function onExitEdit(e){
 
 // ---------- challan stub ----------
 function renderStub(){
-  let gross=0, epfw=0, epsw=0, edliw=0, ac1ee=0, ac1er=0, ac10=0;
+  let gross=0, epfw=0, epsw=0, edliw=0, ac1ee=0, ac1er=0, ac10=0, vpf=0;
   wageRows.forEach(row=>{
     const c = calc(row);
     gross += Number(row.gross)||0;
+    vpf += c.vpf;
     epfw += c.epfW;
     epsw += c.eps;
     edliw += c.edli;
@@ -202,6 +237,8 @@ function renderStub(){
   document.getElementById('s-epsw').textContent = fmt(epsw);
   document.getElementById('s-edliw').textContent = fmt(edliw);
   document.getElementById('s-ac1ee').textContent = fmt(ac1ee);
+  document.getElementById('s-vpf').textContent = fmt(vpf);
+  document.getElementById('s-vpf-row').hidden = vpf === 0;
   document.getElementById('s-ac1er').textContent = fmt(ac1er);
   document.getElementById('s-ac1t').textContent = fmt(ac1t);
   document.getElementById('s-ac10').textContent = fmt(ac10);
@@ -297,7 +334,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 });
 
 document.getElementById('add-row-btn').addEventListener('click', ()=>{
-  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, refund:0, higher:'Y', eps:'Y', sep:'cap'});
+  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, vpf:0, refund:0, higher:'Y', eps:'Y', sep:'cap'});
   renderWageTable();
   renderStub();
 });
@@ -438,10 +475,12 @@ function importRows(rows, issues){
     wageRows.push({
       uan: r.uan, name: r.name,
       gross: Number(r.gross)||0, epf: Number(r.epf)||0,
-      ncp: Number(r.ncp)||0, refund: Number(r.refund)||0,
+      ncp: isNaN(Number(r.ncp)) ? r.ncp : Number(r.ncp),
+      vpf: isNaN(Number(r.vpf)) ? r.vpf : Number(r.vpf),
+      refund: Number(r.refund)||0,
       higher: 'Y', eps: 'Y', sep: 'cap',
     });
-    if(issues && issues[i] && issues[i].length) badRows.push(i+1);
+    if((issues && issues[i] && issues[i].length) || rowHasIssue(wageRows[wageRows.length-1])) badRows.push(i+1);
   });
   renderWageTable();
   renderStub();
@@ -455,7 +494,8 @@ function importRows(rows, issues){
 // ---------- mapping modal ----------
 const FIELD_LABELS = {
   uan: 'UAN', name: 'Member name', gross: 'Gross wages', epf: 'EPF wages',
-  ncp: 'NCP days (optional)', refund: 'Refund of advances (optional)',
+  ncp: 'NCP days (optional)', vpf: 'VPF amount (optional)',
+  refund: 'Refund of advances (optional)',
 };
 
 function openMappingModal(data){
@@ -547,9 +587,9 @@ document.getElementById('gen-ecr-btn').addEventListener('click', ()=>{
     showToast('Enter establishment code and wage month first');
     return;
   }
-  const badRow = wageRows.find(r=>!isValidUAN(r.uan));
+  const badRow = wageRows.find(rowHasIssue);
   if(badRow){
-    showToast('Fix invalid UAN(s) before generating — highlighted in red');
+    showToast('Fix the rows highlighted in red (UAN, NCP days or VPF) before generating');
     return;
   }
   downloadGenerated('/api/ecr/generate', {estab_code, wage_month, rows: wageRows}, 'ecr.txt');
