@@ -20,8 +20,7 @@ const OLD_CEILING = 15000, NEW_CEILING = 25000, SPLIT_MONTH = '2026-09';
 const SPLIT_BEFORE = 16/30, SPLIT_AFTER = 14/30;
 
 const SEP_BASES = {
-  cap:   'EPS member, capped ₹15,000 till 16th',
-  full:  'EPS member, on full wages till 16th',
+  cap:   'EPS member throughout',
   noeps: 'EPF only till 16th, joins EPS 17th',
   new:   'Newly covered from 17th',
 };
@@ -34,18 +33,26 @@ function calc(row){
   const w = Number(row.epf)||0;
   const month = wageMonth();
   const epsMember = row.eps !== 'N';
+  // Higher EPF: EPF on actual wages above the ceiling. EPS/EDLI stay capped,
+  // so the excess employer share goes to the diff.
+  const higher = row.higher === 'Y';
   let epfW, epsW, edliW;
   if(month === SPLIT_MONTH){
     const old = Math.min(w, OLD_CEILING), neu = Math.min(w, NEW_CEILING);
     const split = old*SPLIT_BEFORE + neu*SPLIT_AFTER;
-    if(!epsMember){ epfW = w; epsW = 0; edliW = split; }
-    else if(row.sep === 'new'){ epfW = epsW = edliW = neu*SPLIT_AFTER; }
-    else if(row.sep === 'noeps'){ epfW = w; epsW = neu*SPLIT_AFTER; edliW = split; }
-    else if(row.sep === 'full'){ epfW = w; epsW = edliW = split; }
-    else { epfW = epsW = edliW = split; }
+    edliW = split;
+    if(epsMember && row.sep === 'new'){
+      epfW = (higher ? w : neu)*SPLIT_AFTER;
+      epsW = edliW = neu*SPLIT_AFTER;
+    }else{
+      epfW = higher ? w : split;
+      if(!epsMember) epsW = 0;
+      else if(row.sep === 'noeps') epsW = neu*SPLIT_AFTER;
+      else epsW = split;
+    }
   }else{
     const ceiling = ceilingFor(month);
-    epfW = w;
+    epfW = higher ? w : Math.min(w, ceiling);
     epsW = epsMember ? Math.min(w, ceiling) : 0;
     edliW = Math.min(w, ceiling);
   }
@@ -72,6 +79,8 @@ function renderWageTable(){
     if(uanBad) tr.classList.add('issue-row');
     const epsOpts = [['Y','Yes'],['N','No']].map(([v,l])=>
       `<option value="${v}" ${(row.eps||'Y')===v?'selected':''}>${l}</option>`).join('');
+    const higherOpts = [['N','No'],['Y','Yes']].map(([v,l])=>
+      `<option value="${v}" ${(row.higher||'N')===v?'selected':''}>${l}</option>`).join('');
     const sepOpts = Object.entries(SEP_BASES).map(([v,l])=>
       `<option value="${v}" ${(row.sep||'cap')===v?'selected':''}>${l}</option>`).join('');
     const epfNote = c.epfW !== Math.round(Number(row.epf)||0)
@@ -82,6 +91,7 @@ function renderWageTable(){
       <td class="left editable" contenteditable="true" data-field="name" data-i="${i}">${row.name}</td>
       <td class="editable" contenteditable="true" data-field="gross" data-i="${i}">${row.gross}</td>
       <td class="editable" contenteditable="true" data-field="epf" data-i="${i}">${row.epf}${epfNote}</td>
+      <td><select class="cell-select" data-sfield="higher" data-i="${i}">${higherOpts}</select></td>
       <td><select class="cell-select" data-sfield="eps" data-i="${i}">${epsOpts}</select></td>
       <td class="split-col"><select class="cell-select" data-sfield="sep" data-i="${i}" ${row.eps==='N'?'disabled':''}>${sepOpts}</select></td>
       <td class="calc">${fmt(c.eps)}</td>
@@ -287,7 +297,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 });
 
 document.getElementById('add-row-btn').addEventListener('click', ()=>{
-  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, refund:0, eps:'Y', sep:'cap'});
+  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, refund:0, higher:'N', eps:'Y', sep:'cap'});
   renderWageTable();
   renderStub();
 });
@@ -429,7 +439,7 @@ function importRows(rows, issues){
       uan: r.uan, name: r.name,
       gross: Number(r.gross)||0, epf: Number(r.epf)||0,
       ncp: Number(r.ncp)||0, refund: Number(r.refund)||0,
-      eps: 'Y', sep: 'cap',
+      higher: 'N', eps: 'Y', sep: 'cap',
     });
     if(issues && issues[i] && issues[i].length) badRows.push(i+1);
   });

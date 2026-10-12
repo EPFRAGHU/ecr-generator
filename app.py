@@ -322,11 +322,11 @@ NEW_CEILING = 25000
 SPLIT_MONTH = "2026-09"
 SPLIT_DAYS_BEFORE, SPLIT_DAYS_AFTER, SPLIT_DAYS_TOTAL = 16, 14, 30
 
-# How a member was treated from 01.09.2026 to 16.09.2026 (FAQ Q7 scenarios)
+# How a member was treated from 01.09.2026 to 16.09.2026 (FAQ Q7 scenarios).
+# Whether EPF is on capped or full wages is the separate "higher EPF" flag.
 SEP_BASES = {
-    "cap",    # Scenario C: EPS member contributing on wages capped at 15,000
-    "full",   # EPS member contributing on full (higher) wages, EPS capped
-    "noeps",  # Scenario B: EPF-only member on full wages, joins EPS 17.09.2026
+    "cap",    # Scenario C: EPS member throughout
+    "noeps",  # Scenario B: EPF-only member, joins EPS 17.09.2026
     "new",    # Scenario A: excluded employee, covered from 17.09.2026
 }
 
@@ -340,36 +340,35 @@ def ceiling_for(wage_month: str) -> int:
     return NEW_CEILING if (wage_month or "") > SPLIT_MONTH else OLD_CEILING
 
 
-def calc_row(epf, wage_month="", eps_member=True, sep_basis="cap") -> dict:
+def calc_row(epf, wage_month="", eps_member=True, sep_basis="cap", higher=False) -> dict:
     """
-    `epf` is the member's EPF wages for the month. Outside September 2026 it
-    is the contribution base as entered; EPS/EDLI wages are capped at the
-    month's ceiling. In September 2026 it is the full-month wage and is
-    split per `sep_basis`.
+    `epf` is the member's full-month EPF wages. EPF wages are capped at the
+    ceiling (15,000 up to 16.09.2026, 25,000 from 17.09.2026) unless `higher`
+    is set, in which case EPF is on the actual wage. EPS and EDLI wages are
+    always capped, so the excess employer share goes to the EPF diff. In
+    September 2026 the wage is split per `sep_basis`.
     """
     w = float(epf or 0)
     if wage_month == SPLIT_MONTH:
         f1 = SPLIT_DAYS_BEFORE / SPLIT_DAYS_TOTAL
         f2 = SPLIT_DAYS_AFTER / SPLIT_DAYS_TOTAL
         old, new = min(w, OLD_CEILING), min(w, NEW_CEILING)
-        if not eps_member:
-            epf_w = w
-            eps_w = 0.0
-            edli_w = old * f1 + new * f2
-        elif sep_basis == "new":
-            epf_w = eps_w = edli_w = new * f2
-        elif sep_basis == "noeps":
-            epf_w = w * f1 + w * f2
-            eps_w = new * f2
-            edli_w = old * f1 + new * f2
-        elif sep_basis == "full":
-            epf_w = w * f1 + w * f2
-            eps_w = edli_w = old * f1 + new * f2
-        else:  # "cap"
-            epf_w = eps_w = edli_w = old * f1 + new * f2
+        split = old * f1 + new * f2
+        edli_w = split
+        if eps_member and sep_basis == "new":
+            epf_w = (w if higher else new) * f2
+            eps_w = edli_w = new * f2
+        else:
+            epf_w = w if higher else split
+            if not eps_member:
+                eps_w = 0.0
+            elif sep_basis == "noeps":
+                eps_w = new * f2
+            else:  # "cap"
+                eps_w = split
     else:
         ceiling = ceiling_for(wage_month)
-        epf_w = w
+        epf_w = w if higher else min(w, ceiling)
         eps_w = min(w, ceiling) if eps_member else 0.0
         edli_w = min(w, ceiling)
 
@@ -387,6 +386,10 @@ def calc_row(epf, wage_month="", eps_member=True, sep_basis="cap") -> dict:
 
 def row_eps_member(row: dict) -> bool:
     return str(row.get("eps", "Y")).strip().upper() != "N"
+
+
+def row_higher_epf(row: dict) -> bool:
+    return str(row.get("higher", "N")).strip().upper() == "Y"
 
 
 def row_sep_basis(row: dict) -> str:
@@ -516,7 +519,9 @@ def generate_ecr():
     for row in rows:
         gross = float(row.get("gross") or 0)
         epf = float(row.get("epf") or 0)
-        calc = calc_row(epf, wage_month, row_eps_member(row), row_sep_basis(row))
+        calc = calc_row(
+            epf, wage_month, row_eps_member(row), row_sep_basis(row), row_higher_epf(row)
+        )
         ncp = row.get("ncp") or 0
         refund = row.get("refund") or 0
 
