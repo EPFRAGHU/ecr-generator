@@ -114,13 +114,13 @@ function renderWageTable(){
     const sepOpts = Object.entries(SEP_BASES).map(([v,l])=>
       `<option value="${v}" ${(row.sep||'cap')===v?'selected':''}>${l}</option>`).join('');
     const epfNote = c.epfW !== Math.round(Number(row.epf)||0)
-      ? `<span class="calc-note">ECR: ${fmt(c.epfW)}</span>` : '';
+      ? `<span class="calc-note" contenteditable="false">ECR: ${fmt(c.epfW)}</span>` : '';
     tr.innerHTML = `
       <td class="rownum">${i+1}</td>
       <td class="left editable" contenteditable="true" data-field="uan" data-i="${i}">${row.uan}${uanBad ? '<span class="issue-note">not 12 digits</span>' : ''}</td>
       <td class="left editable" contenteditable="true" data-field="name" data-i="${i}">${row.name}</td>
-      <td class="editable" contenteditable="true" data-field="gross" data-i="${i}">${row.gross}</td>
-      <td class="editable" contenteditable="true" data-field="epf" data-i="${i}">${row.epf}${epfNote}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="gross" data-i="${i}">${row.gross}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="epf" data-i="${i}">${row.epf}${epfNote}</td>
       <td class="editable input-box" contenteditable="true" inputmode="numeric" data-field="ncp" data-i="${i}">${row.ncp ?? 0}${ncpBad ? `<span class="issue-note">${ncpBad}</span>` : ''}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="vpf" data-i="${i}">${row.vpf ?? 0}${vpfBad ? `<span class="issue-note">${vpfBad}</span>` : ''}</td>
       <td><select class="cell-select" data-sfield="higher" data-i="${i}">${higherOpts}</select></td>
