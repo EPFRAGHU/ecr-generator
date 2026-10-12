@@ -63,15 +63,30 @@
     font-size: 11px;
   }
 
+  /* Top strip: feedback email in the middle, signed-in user on the right */
+  .top-bar{
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 8px 16px;
+    margin: -14px 0 12px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .feedback{ grid-column: 2; text-align: center; }
+  .feedback a{ color: var(--stamp); font-weight: 600; }
   .user-bar{
+    grid-column: 3;
     display: flex;
     justify-content: flex-end;
     align-items: center;
     flex-wrap: wrap;
     gap: 6px 12px;
-    margin: -14px 0 12px;
-    font-size: 12px;
-    color: var(--ink-soft);
+  }
+  @media (max-width: 760px){
+    .top-bar{ grid-template-columns: 1fr; }
+    .feedback, .user-bar{ grid-column: 1; }
+    .user-bar{ justify-content: center; }
   }
   .user-bar[hidden]{ display: none; }
   .user-bar strong{ color: var(--ink); font-weight: 600; }
