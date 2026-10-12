@@ -340,7 +340,7 @@ def ceiling_for(wage_month: str) -> int:
     return NEW_CEILING if (wage_month or "") > SPLIT_MONTH else OLD_CEILING
 
 
-def calc_row(epf, wage_month="", eps_member=True, sep_basis="cap", higher=False) -> dict:
+def calc_row(epf, wage_month="", eps_member=True, sep_basis="cap", higher=True) -> dict:
     """
     `epf` is the member's full-month EPF wages. EPF wages are capped at the
     ceiling (15,000 up to 16.09.2026, 25,000 from 17.09.2026) unless `higher`
@@ -389,7 +389,7 @@ def row_eps_member(row: dict) -> bool:
 
 
 def row_higher_epf(row: dict) -> bool:
-    return str(row.get("higher", "N")).strip().upper() == "Y"
+    return str(row.get("higher", "Y")).strip().upper() != "N"
 
 
 def row_sep_basis(row: dict) -> str:

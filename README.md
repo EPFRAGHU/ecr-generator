@@ -73,8 +73,9 @@ minutes. Visitors stay registered on their device for a year.
 - **Wage ceiling** — follows S.O. 5109(E): ₹15,000 up to August 2026,
   ₹25,000 from October 2026. September 2026 is a split month (1–16 Sep at
   ₹15,000, 17–30 Sep at ₹25,000, pro rata by days, single ECR) per the EPFO
-  FAQ. Each row has a "Higher EPF" flag (Yes = EPF contributions on the
-  actual wage above the ceiling; No = EPF wages capped at the ceiling). EPS
+  FAQ. Each row has a "Higher EPF" flag (Yes, the default = EPF
+  contributions on the actual wage above the ceiling; No = EPF wages
+  capped at the ceiling). EPS
   and EDLI wages are always capped, so the EPS contribution is restricted
   to 8.33% of the ceiling and the rest of the employer's 12% goes to the
   diff. Each row also has an "EPS member" flag (No = EPS wages 0, full

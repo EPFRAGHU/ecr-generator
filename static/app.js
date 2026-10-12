@@ -35,7 +35,7 @@ function calc(row){
   const epsMember = row.eps !== 'N';
   // Higher EPF: EPF on actual wages above the ceiling. EPS/EDLI stay capped,
   // so the excess employer share goes to the diff.
-  const higher = row.higher === 'Y';
+  const higher = row.higher !== 'N';
   let epfW, epsW, edliW;
   if(month === SPLIT_MONTH){
     const old = Math.min(w, OLD_CEILING), neu = Math.min(w, NEW_CEILING);
@@ -79,8 +79,8 @@ function renderWageTable(){
     if(uanBad) tr.classList.add('issue-row');
     const epsOpts = [['Y','Yes'],['N','No']].map(([v,l])=>
       `<option value="${v}" ${(row.eps||'Y')===v?'selected':''}>${l}</option>`).join('');
-    const higherOpts = [['N','No'],['Y','Yes']].map(([v,l])=>
-      `<option value="${v}" ${(row.higher||'N')===v?'selected':''}>${l}</option>`).join('');
+    const higherOpts = [['Y','Yes'],['N','No']].map(([v,l])=>
+      `<option value="${v}" ${(row.higher||'Y')===v?'selected':''}>${l}</option>`).join('');
     const sepOpts = Object.entries(SEP_BASES).map(([v,l])=>
       `<option value="${v}" ${(row.sep||'cap')===v?'selected':''}>${l}</option>`).join('');
     const epfNote = c.epfW !== Math.round(Number(row.epf)||0)
@@ -297,7 +297,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 });
 
 document.getElementById('add-row-btn').addEventListener('click', ()=>{
-  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, refund:0, higher:'N', eps:'Y', sep:'cap'});
+  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, refund:0, higher:'Y', eps:'Y', sep:'cap'});
   renderWageTable();
   renderStub();
 });
@@ -439,7 +439,7 @@ function importRows(rows, issues){
       uan: r.uan, name: r.name,
       gross: Number(r.gross)||0, epf: Number(r.epf)||0,
       ncp: Number(r.ncp)||0, refund: Number(r.refund)||0,
-      higher: 'N', eps: 'Y', sep: 'cap',
+      higher: 'Y', eps: 'Y', sep: 'cap',
     });
     if(issues && issues[i] && issues[i].length) badRows.push(i+1);
   });
