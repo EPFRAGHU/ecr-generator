@@ -566,6 +566,14 @@ document.getElementById('gen-exit-btn').addEventListener('click', ()=>{
 });
 
 // ---------- init ----------
+// Default wage month: the month before the current one (ECRs are filed for
+// the previous month's wages).
+{
+  const d = new Date();
+  const prev = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  document.getElementById('wage-month').value =
+    `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`;
+}
 renderWageTable();
 renderExitTable();
 renderStub();
