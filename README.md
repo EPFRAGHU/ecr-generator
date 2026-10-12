@@ -70,6 +70,10 @@ minutes. Visitors stay registered on their device for a year.
   required column can't be matched, a mapping step appears so you can pick it
   by hand. EPS Wages, EDLI Wages, EPF/EPS contributions and the diff are
   calculated automatically, same formulas as Sheet1 of the original workbook.
+  "Download template" (`/api/template`) gives an Excel file with the
+  expected headers — UAN, Member name, Gross wages, EPF wages, NCP days,
+  VPF, Refund of advances — and an Instructions sheet; a filled-in
+  template uploads without the mapping step.
 - **Wage ceiling** — follows S.O. 5109(E): ₹15,000 up to August 2026,
   ₹25,000 from October 2026. September 2026 is a split month (1–16 Sep at
   ₹15,000, 17–30 Sep at ₹25,000, pro rata by days, single ECR) per the EPFO

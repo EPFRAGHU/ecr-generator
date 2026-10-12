@@ -378,6 +378,7 @@
   }
   .btn:hover{ background: var(--paper-deep); }
   .btn.ghost{ border-style: dashed; }
+  a.btn{ text-decoration: none; display: inline-flex; align-items: center; }
   .legend{
     font-size: 11px;
     color: var(--ink-soft);

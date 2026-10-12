@@ -549,6 +549,64 @@ def upload():
     )
 
 
+# Header names match FIELD_SYNONYMS, so a filled-in template uploads without
+# the mapping step.
+TEMPLATE_COLUMNS = [
+    ("UAN", 16),
+    ("Member name", 30),
+    ("Gross wages", 14),
+    ("EPF wages", 14),
+    ("NCP days", 11),
+    ("VPF", 11),
+    ("Refund of advances", 20),
+]
+
+
+@app.route("/api/template")
+def upload_template():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Wages"
+    ws.append([name for name, _ in TEMPLATE_COLUMNS])
+    for idx, (_, width) in enumerate(TEMPLATE_COLUMNS, start=1):
+        col = ws.cell(row=1, column=idx).column_letter
+        ws.column_dimensions[col].width = width
+        ws.cell(row=1, column=idx).font = Font(bold=True)
+    # Store UANs as text so Excel doesn't turn 12 digits into 1.01E+11.
+    for row in range(2, 1001):
+        ws.cell(row=row, column=1).number_format = "@"
+    ws.freeze_panes = "A2"
+
+    notes = wb.create_sheet("Instructions")
+    for line in [
+        ["Fill one row per member on the Wages sheet, then upload this file."],
+        ["UAN", "12-digit UAN (required)"],
+        ["Member name", "As in the UAN record (required)"],
+        ["Gross wages", "Total wages for the month, in rupees (required)"],
+        ["EPF wages", "Full-month EPF wages, in rupees (required)"],
+        ["NCP days", "Non-contributory period days: whole days, 0 to days in the month"],
+        ["VPF", "Voluntary PF for the month, in rupees (0 if none)"],
+        ["Refund of advances", "In rupees (0 if none)"],
+    ]:
+        notes.append(line)
+    notes.column_dimensions["A"].width = 22
+    notes.column_dimensions["B"].width = 70
+    notes["A1"].font = Font(bold=True)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="ECR_wage_upload_template.xlsx",
+    )
+
+
 @app.route("/api/ecr/generate", methods=["POST"])
 def generate_ecr():
     data = request.get_json(force=True)
