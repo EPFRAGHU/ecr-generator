@@ -131,7 +131,7 @@ function renderWageTable(){
       <td class="calc">${fmt(c.epfContri)}</td>
       <td class="calc">${fmt(c.epsContri)}</td>
       <td class="calc">${fmt(c.diff)}</td>
-      <td class="editable" contenteditable="true" data-field="refund" data-i="${i}">${row.refund}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="refund" data-i="${i}">${row.refund}</td>
       <td class="delete-cell"><button class="del-btn" data-del="${i}">×</button></td>
     `;
     tbody.appendChild(tr);
@@ -140,6 +140,13 @@ function renderWageTable(){
 
   tbody.querySelectorAll('.editable').forEach(cell=>{
     cell.addEventListener('blur', onWageEdit);
+  });
+  tbody.querySelectorAll('.editable').forEach(cell=>{
+    // Amount/day cells open blank for typing; leaving one blank keeps the
+    // old value (see onWageEdit).
+    if(BLANK_ON_FOCUS.includes(cell.dataset.field)){
+      cell.addEventListener('focus', ()=>{ cell.textContent = ''; });
+    }
   });
   tbody.querySelectorAll('.cell-select').forEach(sel=>{
     sel.addEventListener('change', ()=>{
@@ -156,16 +163,20 @@ function renderWageTable(){
   });
 }
 
+const BLANK_ON_FOCUS = ['gross','epf','ncp','vpf','refund'];
+
 function onWageEdit(e){
   const i = Number(e.target.dataset.i);
   const field = e.target.dataset.field;
   const note = e.target.querySelector('.issue-note, .calc-note');
   let val = e.target.textContent.replace(note ? note.textContent : '', '').trim();
+  // A cell cleared on focus and left blank keeps its previous value.
+  const keepOld = val === '' && BLANK_ON_FOCUS.includes(field);
   if(['gross','epf','refund'].includes(field)){ val = Number(val)||0; }
   // Keep a non-numeric NCP/VPF entry as typed so the row is flagged instead
   // of silently becoming 0.
   if(['ncp','vpf'].includes(field)){ val = val === '' ? 0 : (isNaN(Number(val)) ? val : Number(val)); }
-  wageRows[i][field] = val;
+  if(!keepOld) wageRows[i][field] = val;
   // Tab/Shift+Tab/click has already moved focus to e.relatedTarget, which
   // the re-render is about to replace.
   rerenderKeepingFocus(e.relatedTarget);
