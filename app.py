@@ -48,6 +48,18 @@ visitors.init_db()
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
+# Release shown under "Employer Module". Bump on every release:
+# MAJOR.MINOR for a feature release, the last number (sub-version) for a
+# fix or small change; set APP_BUILD to the release date and time (IST).
+# History is in README.md under "Version history".
+APP_VERSION = "1.2.6"
+APP_BUILD = "12-10-2026 21:00 IST"
+
+
+@app.context_processor
+def inject_version() -> dict:
+    return {"app_version": APP_VERSION, "app_build": APP_BUILD}
+
 # ---------------------------------------------------------------------------
 # Admin login — protects /admin (the visitor list). Credentials from
 # environment (set in Coolify):

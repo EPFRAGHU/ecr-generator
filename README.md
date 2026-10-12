@@ -102,6 +102,25 @@ minutes. Visitors stay registered on their device for a year.
   which return the `.txt` file with the same filename convention as the macro:
   `<establishment code><YYYY><MM>.txt` and `...exit.txt`.
 
+## Version history
+
+The version and release date/time are set in `APP_VERSION` / `APP_BUILD`
+in `app.py` and shown under "Employer Module". MAJOR.MINOR changes for a
+feature release; the last number (sub-version) changes for fixes and small
+changes.
+
+| Version | Date (IST) | Changes |
+|---|---|---|
+| 1.2.6 | 12-10-2026 21:00 | Version number shown on the page |
+| 1.2.5 | 12-10-2026 20:51 | Amount cells open blank on click; blank keeps the old value |
+| 1.2.4 | 12-10-2026 20:46 | Tab / Shift+Tab move between columns |
+| 1.2.3 | 12-10-2026 20:42 | Template downloads with the .xlsx extension |
+| 1.2.2 | 12-10-2026 20:37 | Download template button |
+| 1.2.1 | 12-10-2026 20:33 | Gross and EPF wages shown as input boxes |
+| 1.2.0 | 12-10-2026 20:25 | VPF per member; NCP days validated |
+| 1.1.0 | 12-10-2026 15:13 | Higher EPF option (default Yes); wage month defaults to previous month |
+| 1.0.0 | 25-09-2026 09:39 | Registration gate, revised wage ceiling, upload, ECR and exit files |
+
 ## Known deliberate difference from the original macro
 
 The original `TEXTFILE()` macro has a bug where the "Refund of Advances"
