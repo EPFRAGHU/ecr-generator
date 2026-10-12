@@ -144,8 +144,7 @@ function renderWageTable(){
   tbody.querySelectorAll('.cell-select').forEach(sel=>{
     sel.addEventListener('change', ()=>{
       wageRows[Number(sel.dataset.i)][sel.dataset.sfield] = sel.value;
-      renderWageTable();
-      renderStub();
+      rerenderKeepingFocus(sel);
     });
   });
   tbody.querySelectorAll('.del-btn').forEach(btn=>{
@@ -167,8 +166,38 @@ function onWageEdit(e){
   // of silently becoming 0.
   if(['ncp','vpf'].includes(field)){ val = val === '' ? 0 : (isNaN(Number(val)) ? val : Number(val)); }
   wageRows[i][field] = val;
+  // Tab/Shift+Tab/click has already moved focus to e.relatedTarget, which
+  // the re-render is about to replace.
+  rerenderKeepingFocus(e.relatedTarget);
+}
+
+// Re-rendering rebuilds every row, so the element that had (or was about
+// to get) focus is destroyed. Find its replacement and focus that instead.
+function cellSelector(el){
+  if(!el || !el.dataset || el.dataset.i === undefined) return null;
+  if(el.dataset.field) return `[data-field="${el.dataset.field}"][data-i="${el.dataset.i}"]`;
+  if(el.dataset.sfield) return `[data-sfield="${el.dataset.sfield}"][data-i="${el.dataset.i}"]`;
+  return null;
+}
+
+function rerenderKeepingFocus(target){
+  const tbody = document.getElementById('wage-tbody');
+  const sel = target && tbody.contains(target) ? cellSelector(target) : null;
   renderWageTable();
   renderStub();
+  const next = sel && tbody.querySelector(sel);
+  if(!next) return;
+  next.focus();
+  if(next.isContentEditable){
+    // Select the value (not the red/grey note under it) so typing replaces it.
+    const text = next.firstChild;
+    const range = document.createRange();
+    if(text && text.nodeType === Node.TEXT_NODE) range.selectNodeContents(text);
+    else range.selectNodeContents(next);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(range);
+  }
 }
 
 // ---------- exit table ----------
