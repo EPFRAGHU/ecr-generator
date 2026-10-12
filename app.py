@@ -562,7 +562,13 @@ TEMPLATE_COLUMNS = [
 ]
 
 
+TEMPLATE_FILENAME = "ECR_wage_upload_template.xlsx"
+
+
+# The URL ends in the filename so browsers that name downloads from the
+# URL (ignoring Content-Disposition) still save it as .xlsx.
 @app.route("/api/template")
+@app.route(f"/api/template/{TEMPLATE_FILENAME}")
 def upload_template():
     from openpyxl import Workbook
     from openpyxl.styles import Font
@@ -603,7 +609,7 @@ def upload_template():
         buf,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
-        download_name="ECR_wage_upload_template.xlsx",
+        download_name=TEMPLATE_FILENAME,
     )
 
 
