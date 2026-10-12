@@ -111,6 +111,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.3.0 | 12-10-2026 21:20 | Signed-in name and email at the top right, with a Log out button |
 | 1.2.6 | 12-10-2026 21:00 | Version number shown on the page |
 | 1.2.5 | 12-10-2026 20:51 | Amount cells open blank on click; blank keeps the old value |
 | 1.2.4 | 12-10-2026 20:46 | Tab / Shift+Tab move between columns |

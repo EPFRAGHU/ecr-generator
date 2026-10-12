@@ -41,6 +41,14 @@
   </form>
 </div>
 
+<div class="user-bar" id="user-bar" {% if not visitor %}hidden{% endif %}>
+  <span class="user-who">
+    Signed in as <strong id="user-name">{{ visitor.name if visitor else '' }}</strong>
+    <span class="user-email" id="user-email">{{ visitor.email if visitor else '' }}</span>
+  </span>
+  <button class="btn ghost btn-small" type="button" id="signout-btn">Log out</button>
+</div>
+
 <div class="masthead">
   <div>
     <h1>EPFO Monthly ECR Generator</h1>

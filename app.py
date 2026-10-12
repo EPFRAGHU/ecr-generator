@@ -52,8 +52,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # MAJOR.MINOR for a feature release, the last number (sub-version) for a
 # fix or small change; set APP_BUILD to the release date and time (IST).
 # History is in README.md under "Version history".
-APP_VERSION = "1.2.6"
-APP_BUILD = "12-10-2026 21:00 IST"
+APP_VERSION = "1.3.0"
+APP_BUILD = "12-10-2026 21:20 IST"
 
 
 @app.context_processor
@@ -234,7 +234,15 @@ def register():
     session.permanent = True
     session["reg_id"] = reg_id
     _log("register")
-    return jsonify({"status": "ok", "name": name})
+    return jsonify({"status": "ok", "name": name, "email": email})
+
+
+@app.route("/api/signout", methods=["POST"])
+def visitor_signout():
+    # Forget the registration on this device; the record itself is kept, and
+    # registering again with the same mobile number reuses it.
+    session.pop("reg_id", None)
+    return jsonify({"status": "ok"})
 
 
 # ---------------------------------------------------------------------------
@@ -478,7 +486,8 @@ def _whole_number_text(val: str) -> str:
 @app.route("/")
 def index():
     _log("view")
-    return render_template("index.html", registered=_current_reg_id() is not None)
+    visitor = visitors.get_registration(session.get("reg_id"))
+    return render_template("index.html", registered=visitor is not None, visitor=visitor)
 
 
 @app.route("/api/upload", methods=["POST"])

@@ -63,6 +63,21 @@
     font-size: 11px;
   }
 
+  .user-bar{
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin: -14px 0 12px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .user-bar[hidden]{ display: none; }
+  .user-bar strong{ color: var(--ink); font-weight: 600; }
+  .user-email{ font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin-left: 6px; }
+  .btn.btn-small{ padding: 4px 12px; font-size: 12px; }
+
   .control-strip{
     display:flex;
     gap: 22px;

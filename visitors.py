@@ -81,6 +81,16 @@ def registration_exists(reg_id) -> bool:
         ).fetchone() is not None
 
 
+def get_registration(reg_id) -> dict | None:
+    if not isinstance(reg_id, int):
+        return None
+    with closing(_connect()) as conn:
+        row = conn.execute(
+            "SELECT id, name, email FROM registrations WHERE id = ?", (reg_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
 def log_event(visitor_id: str, reg_id: int | None, kind: str) -> None:
     with closing(_connect()) as conn, conn:
         conn.execute(

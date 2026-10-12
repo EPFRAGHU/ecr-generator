@@ -352,7 +352,23 @@ document.getElementById('reg-form').addEventListener('submit', async e=>{
     return;
   }
   document.body.classList.remove('gated');
+  document.getElementById('user-name').textContent = data.name;
+  document.getElementById('user-email').textContent = data.email || '';
+  document.getElementById('user-bar').hidden = false;
   showToast(`Welcome, ${data.name}!`);
+});
+
+// Log out forgets the registration on this device and reloads, which also
+// clears the wage data entered in this browser tab.
+document.getElementById('signout-btn').addEventListener('click', async ()=>{
+  if(!confirm('Log out? Any wage data entered on this page will be cleared.')) return;
+  try{
+    await fetch('/api/signout', {method: 'POST'});
+  }catch(err){
+    showToast('Could not reach the server — please try again');
+    return;
+  }
+  window.location.reload();
 });
 
 function showToast(msg){
