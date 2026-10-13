@@ -96,6 +96,9 @@ minutes. Visitors stay registered on their device for a year.
   "NCP days" / "LOP days" column). Whole days only, from 0 up to the
   number of days in the wage month; anything else highlights the row and
   blocks generation.
+- **Duplicate UANs** — a UAN that appears on more than one row is
+  highlighted on every such row ("duplicate — also row …") and the ECR
+  can't be generated until it is fixed; the server rejects duplicates too.
 - **VPF** — voluntary PF per member, as a rupee amount (or uploaded from a
   "VPF" / "Voluntary PF" column). It is added to the member's EPF
   contribution in the ECR and to the A/c 1 employee share in the challan
@@ -116,6 +119,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.5.1 | 13-10-2026 09:00 | Duplicate UANs in the wage register are flagged and block ECR generation |
 | 1.5.0 | 13-10-2026 08:40 | On desktop only the wage rows scroll; header, establishment code / wage month and challan summary stay in place |
 | 1.4.2 | 13-10-2026 08:15 | Compact header and challan summary so the summary fits on screen; outdated "Prototype" note removed |
 | 1.4.1 | 13-10-2026 07:50 | Suggestions email also on the registration form; browsers reload style/script files on each new version |

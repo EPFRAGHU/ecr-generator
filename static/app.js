@@ -113,7 +113,20 @@ function vpfIssue(vpf){
   return /^\d+(\.\d+)?$/.test(s) ? '' : 'not a valid amount';
 }
 
-const rowHasIssue = row => !isValidUAN(row.uan) || !!ncpIssue(row.ncp) || !!vpfIssue(row.vpf);
+// Other row numbers (1-based) in the wage register with the same UAN.
+// Keep in sync with duplicate_uan_issue() in app.py.
+function duplicateRows(row){
+  const uan = String(row.uan ?? '').trim();
+  if(!isValidUAN(uan)) return [];
+  const others = [];
+  wageRows.forEach((r, i)=>{
+    if(r !== row && String(r.uan ?? '').trim() === uan) others.push(i+1);
+  });
+  return others;
+}
+
+const rowHasIssue = row => !isValidUAN(row.uan) || duplicateRows(row).length > 0
+  || !!ncpIssue(row.ncp) || !!vpfIssue(row.vpf);
 
 // ---------- wage table ----------
 function renderWageTable(){
@@ -123,7 +136,9 @@ function renderWageTable(){
   document.getElementById('wage-table').classList.toggle('split-month', isSplit);
   wageRows.forEach((row, i)=>{
     const c = calc(row);
-    const uanBad = !isValidUAN(row.uan);
+    const dups = duplicateRows(row);
+    const uanNote = !isValidUAN(row.uan) ? 'not 12 digits'
+      : dups.length ? `duplicate — also row ${dups.join(', ')}` : '';
     const ncpBad = ncpIssue(row.ncp);
     const vpfBad = vpfIssue(row.vpf);
     const tr = document.createElement('tr');
@@ -138,7 +153,7 @@ function renderWageTable(){
       ? `<span class="calc-note" contenteditable="false">ECR: ${fmt(c.epfW)}</span>` : '';
     tr.innerHTML = `
       <td class="rownum">${i+1}</td>
-      <td class="left editable" contenteditable="true" data-field="uan" data-i="${i}">${row.uan}${uanBad ? '<span class="issue-note">not 12 digits</span>' : ''}</td>
+      <td class="left editable" contenteditable="true" data-field="uan" data-i="${i}">${row.uan}${uanNote ? `<span class="issue-note">${uanNote}</span>` : ''}</td>
       <td class="left editable" contenteditable="true" data-field="name" data-i="${i}">${row.name}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="gross" data-i="${i}">${row.gross}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="epf" data-i="${i}">${row.epf}${epfNote}</td>
@@ -547,22 +562,25 @@ async function attemptUpload(file, mapping){
 }
 
 function importRows(rows, issues){
-  const badRows = [];
-  rows.forEach((r, i)=>{
-    wageRows.push({
-      uan: r.uan, name: r.name,
-      gross: Number(r.gross)||0, epf: Number(r.epf)||0,
-      ncp: isNaN(Number(r.ncp)) ? r.ncp : Number(r.ncp),
-      vpf: isNaN(Number(r.vpf)) ? r.vpf : Number(r.vpf),
-      refund: Number(r.refund)||0,
-      higher: 'Y', eps: 'Y', sep: 'cap',
-    });
-    if((issues && issues[i] && issues[i].length) || rowHasIssue(wageRows[wageRows.length-1])) badRows.push(i+1);
-  });
+  const added = rows.map(r=>({
+    uan: r.uan, name: r.name,
+    gross: Number(r.gross)||0, epf: Number(r.epf)||0,
+    ncp: isNaN(Number(r.ncp)) ? r.ncp : Number(r.ncp),
+    vpf: isNaN(Number(r.vpf)) ? r.vpf : Number(r.vpf),
+    refund: Number(r.refund)||0,
+    higher: 'Y', eps: 'Y', sep: 'cap',
+  }));
+  wageRows.push(...added);
+  // Checked after all rows are in, so duplicates within the file and
+  // against rows already on the page are both caught.
+  const badRows = added.filter((row, i)=>
+    (issues && issues[i] && issues[i].length) || rowHasIssue(row));
+  const dupCount = added.filter(row=>duplicateRows(row).length).length;
   renderWageTable();
   renderStub();
   if(badRows.length){
-    showToast(`Imported ${rows.length} rows — ${badRows.length} need a look (highlighted in red)`);
+    const dupText = dupCount ? `, ${dupCount} with a duplicate UAN` : '';
+    showToast(`Imported ${rows.length} rows — ${badRows.length} need a look${dupText} (highlighted in red)`);
   }else{
     showToast(`Imported ${rows.length} rows`);
   }
@@ -666,7 +684,7 @@ document.getElementById('gen-ecr-btn').addEventListener('click', ()=>{
   }
   const badRow = wageRows.find(rowHasIssue);
   if(badRow){
-    showToast('Fix the rows highlighted in red (UAN, NCP days or VPF) before generating');
+    showToast('Fix the rows highlighted in red (invalid or duplicate UAN, NCP days or VPF) before generating');
     return;
   }
   downloadGenerated('/api/ecr/generate', {estab_code, wage_month, rows: wageRows}, 'ecr.txt');

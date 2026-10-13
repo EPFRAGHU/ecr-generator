@@ -52,8 +52,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # MAJOR.MINOR for a feature release, the last number (sub-version) for a
 # fix or small change; set APP_BUILD to the release date and time (IST).
 # History is in README.md under "Version history".
-APP_VERSION = "1.5.0"
-APP_BUILD = "13-10-2026 08:40 IST"
+APP_VERSION = "1.5.1"
+APP_BUILD = "13-10-2026 09:00 IST"
 
 
 @app.context_processor
@@ -463,6 +463,19 @@ def ncp_issue(ncp, wage_month: str) -> str:
     return ""
 
 
+def duplicate_uan_issue(rows: list[dict]) -> str:
+    """Name the first UAN that appears on more than one row, if any."""
+    seen: dict[str, int] = {}
+    for n, row in enumerate(rows, start=1):
+        uan = str(row.get("uan", "")).strip()
+        if not uan:
+            continue
+        if uan in seen:
+            return f"Rows {seen[uan]} and {n} have the same UAN {uan}"
+        seen[uan] = n
+    return ""
+
+
 def vpf_issue(vpf) -> str:
     s = str(vpf if vpf is not None else "").strip()
     if s in ("", "0"):
@@ -681,6 +694,9 @@ def generate_ecr():
         issue = ncp_issue(row.get("ncp"), wage_month) or vpf_issue(row.get("vpf"))
         if issue:
             return jsonify({"error": f"Row {n}: {issue}"}), 400
+    dup = duplicate_uan_issue(rows)
+    if dup:
+        return jsonify({"error": dup}), 400
 
     lines = []
     d = "#~#"
