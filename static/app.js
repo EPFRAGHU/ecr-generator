@@ -33,40 +33,61 @@ function calc(row){
   const w = Number(row.epf)||0;
   const month = wageMonth();
   const epsMember = row.eps !== 'N';
-  // Higher EPF: EPF on actual wages above the ceiling. EPS/EDLI stay capped,
-  // so the excess employer share goes to the diff.
-  const higher = row.higher !== 'N';
-  let epfW, epsW, edliW;
+  // Higher EPF (row.higher):
+  //   Y = employee and employer both contribute on the actual wage above the
+  //       ceiling; EPS/EDLI stay capped, so the excess employer share goes
+  //       to the diff.
+  //   E = employee only: employee 12% on the actual wage, employer 12%
+  //       restricted to the ceiling wage (EPS 8.33% of it, rest as diff).
+  //   N = EPF wages capped at the ceiling for both.
+  const mode = higherMode(row);
+  let cappedW, epsW, edliW;
   if(month === SPLIT_MONTH){
     const old = Math.min(w, OLD_CEILING), neu = Math.min(w, NEW_CEILING);
     const split = old*SPLIT_BEFORE + neu*SPLIT_AFTER;
     edliW = split;
     if(epsMember && row.sep === 'new'){
-      epfW = (higher ? w : neu)*SPLIT_AFTER;
+      // Covered only from 17th: wages for 17-30 Sep only.
+      cappedW = neu*SPLIT_AFTER;
       epsW = edliW = neu*SPLIT_AFTER;
     }else{
-      epfW = higher ? w : split;
+      cappedW = split;
       if(!epsMember) epsW = 0;
       else if(row.sep === 'noeps') epsW = neu*SPLIT_AFTER;
       else epsW = split;
     }
   }else{
     const ceiling = ceilingFor(month);
-    epfW = higher ? w : Math.min(w, ceiling);
+    cappedW = Math.min(w, ceiling);
     epsW = epsMember ? Math.min(w, ceiling) : 0;
     edliW = Math.min(w, ceiling);
   }
+  const fullW = (month === SPLIT_MONTH && epsMember && row.sep === 'new') ? w*SPLIT_AFTER : w;
+  const epfW = mode === 'N' ? cappedW : fullW;
+  const employerW = mode === 'Y' ? fullW : cappedW;
   // VPF is a voluntary employee contribution on top of the 12%. It is
   // remitted with the employee share (ECR "EPF contribution", A/c 1) and
   // does not change the employer's diff.
-  const baseContri = roundHalfUp(epfW*0.12);
+  const eeContri = roundHalfUp(epfW*0.12);
+  const erContri = roundHalfUp(employerW*0.12);
   const vpf = vpfIssue(row.vpf) ? 0 : roundHalfUp(Number(row.vpf)||0);
   const epsContri = roundHalfUp(epsW*0.0833);
   return {
     epfW: roundHalfUp(epfW), eps: roundHalfUp(epsW), edli: roundHalfUp(edliW),
-    vpf, epfContri: baseContri + vpf, epsContri, diff: baseContri - epsContri,
+    vpf, epfContri: eeContri + vpf, epsContri, diff: erContri - epsContri,
   };
 }
+
+// Keep in sync with HIGHER_MODES / row_higher_epf() in app.py.
+const HIGHER_MODES = {
+  Y: 'Yes (both)',
+  E: 'Employee only',
+  N: 'No',
+};
+const higherMode = row => {
+  const m = String(row.higher ?? 'Y').trim().toUpperCase();
+  return m in HIGHER_MODES ? m : 'Y';
+};
 
 function isValidUAN(uan){ return /^\d{12}$/.test(String(uan||'').trim()); }
 
@@ -109,8 +130,8 @@ function renderWageTable(){
     if(rowHasIssue(row)) tr.classList.add('issue-row');
     const epsOpts = [['Y','Yes'],['N','No']].map(([v,l])=>
       `<option value="${v}" ${(row.eps||'Y')===v?'selected':''}>${l}</option>`).join('');
-    const higherOpts = [['Y','Yes'],['N','No']].map(([v,l])=>
-      `<option value="${v}" ${(row.higher||'Y')===v?'selected':''}>${l}</option>`).join('');
+    const higherOpts = Object.entries(HIGHER_MODES).map(([v,l])=>
+      `<option value="${v}" ${higherMode(row)===v?'selected':''}>${l}</option>`).join('');
     const sepOpts = Object.entries(SEP_BASES).map(([v,l])=>
       `<option value="${v}" ${(row.sep||'cap')===v?'selected':''}>${l}</option>`).join('');
     const epfNote = c.epfW !== Math.round(Number(row.epf)||0)

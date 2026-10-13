@@ -77,12 +77,17 @@ minutes. Visitors stay registered on their device for a year.
 - **Wage ceiling** — follows S.O. 5109(E): ₹15,000 up to August 2026,
   ₹25,000 from October 2026. September 2026 is a split month (1–16 Sep at
   ₹15,000, 17–30 Sep at ₹25,000, pro rata by days, single ECR) per the EPFO
-  FAQ. Each row has a "Higher EPF" flag (Yes, the default = EPF
-  contributions on the actual wage above the ceiling; No = EPF wages
-  capped at the ceiling). EPS
-  and EDLI wages are always capped, so the EPS contribution is restricted
-  to 8.33% of the ceiling and the rest of the employer's 12% goes to the
-  diff. Each row also has an "EPS member" flag (No = EPS wages 0, full
+  FAQ. Each row has a "Higher EPF" choice:
+  - **Yes (both)**, the default — employee and employer both contribute
+    12% on the actual wage above the ceiling.
+  - **Employee only** — the employee contributes 12% on the actual wage;
+    the employer's 12% is restricted to the ceiling wage (EPS ₹1,250 +
+    diff ₹550 at ₹15,000; EPS ₹2,083 + diff ₹917 at ₹25,000).
+  - **No** — EPF wages capped at the ceiling for both.
+
+  EPS and EDLI wages are always capped, so the EPS contribution is
+  restricted to 8.33% of the ceiling and the rest of the employer's share
+  goes to the diff. Each row also has an "EPS member" flag (No = EPS wages 0, full
   employer 12% to EPF), and in September 2026 a "1–16 Sep status" choosing
   the FAQ Q7 scenario: EPS member throughout (C), EPF-only joining EPS on
   17 Sep (B), or newly covered from 17 Sep (A). Enter the full-month EPF
@@ -111,6 +116,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.4.0 | 13-10-2026 07:30 | Higher EPF "Employee only": employer share restricted to the ceiling wage |
 | 1.3.1 | 12-10-2026 21:35 | Suggestions email (raghu.epf@gmail.com) at the top middle |
 | 1.3.0 | 12-10-2026 21:20 | Signed-in name and email at the top right, with a Log out button |
 | 1.2.6 | 12-10-2026 21:00 | Version number shown on the page |

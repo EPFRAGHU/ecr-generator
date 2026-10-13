@@ -52,8 +52,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # MAJOR.MINOR for a feature release, the last number (sub-version) for a
 # fix or small change; set APP_BUILD to the release date and time (IST).
 # History is in README.md under "Version history".
-APP_VERSION = "1.3.1"
-APP_BUILD = "12-10-2026 21:35 IST"
+APP_VERSION = "1.4.0"
+APP_BUILD = "13-10-2026 07:30 IST"
 
 
 @app.context_processor
@@ -362,21 +362,45 @@ def ceiling_for(wage_month: str) -> int:
     return NEW_CEILING if (wage_month or "") > SPLIT_MONTH else OLD_CEILING
 
 
+# Higher EPF modes. Keep in sync with HIGHER_MODES in static/app.js.
+HIGHER_MODES = {
+    "Y",  # employee and employer both on the actual wage above the ceiling
+    "E",  # employee on the actual wage, employer restricted to the ceiling
+    "N",  # EPF wages capped at the ceiling for both
+}
+
+
 def calc_row(
-    epf, wage_month="", eps_member=True, sep_basis="cap", higher=True, vpf=0
+    epf, wage_month="", eps_member=True, sep_basis="cap", higher="Y", vpf=0
 ) -> dict:
     """
-    `epf` is the member's full-month EPF wages. EPF wages are capped at the
-    ceiling (15,000 up to 16.09.2026, 25,000 from 17.09.2026) unless `higher`
-    is set, in which case EPF is on the actual wage. EPS and EDLI wages are
-    always capped, so the excess employer share goes to the EPF diff. In
+    `epf` is the member's full-month EPF wages. `higher` is a HIGHER_MODES
+    value (True/False are read as "Y"/"N"):
+
+      Y  EPF wages are the actual wage; employee and employer both pay 12%
+         on it. EPS and EDLI wages stay capped, so the employer's excess
+         goes to the EPF diff.
+      E  EPF wages are the actual wage and the employee pays 12% on it, but
+         the employer's 12% is restricted to the ceiling wage (EPS 8.33% of
+         it, the rest as the diff), e.g. 1,250 + 550 at 15,000 and
+         2,083 + 917 at 25,000.
+      N  EPF wages capped at the ceiling for both.
+
+    The ceiling is 15,000 up to 16.09.2026 and 25,000 from 17.09.2026; in
     September 2026 the wage is split per `sep_basis`.
 
     `vpf` is the voluntary PF amount in rupees. It is remitted with the
     employee share, so it is added to the EPF contribution but not to the
     employer's diff.
     """
+    if higher is True:
+        higher = "Y"
+    elif higher is False:
+        higher = "N"
+    mode = higher if higher in HIGHER_MODES else "Y"
+
     w = float(epf or 0)
+    full_w = w
     if wage_month == SPLIT_MONTH:
         f1 = SPLIT_DAYS_BEFORE / SPLIT_DAYS_TOTAL
         f2 = SPLIT_DAYS_AFTER / SPLIT_DAYS_TOTAL
@@ -384,10 +408,12 @@ def calc_row(
         split = old * f1 + new * f2
         edli_w = split
         if eps_member and sep_basis == "new":
-            epf_w = (w if higher else new) * f2
+            # Covered only from 17th: wages for 17-30 Sep only.
+            full_w = w * f2
+            capped_w = new * f2
             eps_w = edli_w = new * f2
         else:
-            epf_w = w if higher else split
+            capped_w = split
             if not eps_member:
                 eps_w = 0.0
             elif sep_basis == "noeps":
@@ -396,19 +422,23 @@ def calc_row(
                 eps_w = split
     else:
         ceiling = ceiling_for(wage_month)
-        epf_w = w if higher else min(w, ceiling)
+        capped_w = min(w, ceiling)
         eps_w = min(w, ceiling) if eps_member else 0.0
         edli_w = min(w, ceiling)
 
-    base_contri = round_half_up(epf_w * 0.12)
+    epf_w = capped_w if mode == "N" else full_w
+    employer_w = full_w if mode == "Y" else capped_w
+
+    ee_contri = round_half_up(epf_w * 0.12)
+    er_contri = round_half_up(employer_w * 0.12)
     eps_contri = round_half_up(eps_w * 0.0833)
     return {
         "epf_wages": round_half_up(epf_w),
         "eps_wages": round_half_up(eps_w),
         "edli_wages": round_half_up(edli_w),
-        "epf_contri": base_contri + round_half_up(float(vpf or 0)),
+        "epf_contri": ee_contri + round_half_up(float(vpf or 0)),
         "eps_contri": eps_contri,
-        "diff": base_contri - eps_contri,
+        "diff": er_contri - eps_contri,
     }
 
 
@@ -444,8 +474,9 @@ def row_eps_member(row: dict) -> bool:
     return str(row.get("eps", "Y")).strip().upper() != "N"
 
 
-def row_higher_epf(row: dict) -> bool:
-    return str(row.get("higher", "Y")).strip().upper() != "N"
+def row_higher_epf(row: dict) -> str:
+    mode = str(row.get("higher", "Y")).strip().upper()
+    return mode if mode in HIGHER_MODES else "Y"
 
 
 def row_sep_basis(row: dict) -> str:
