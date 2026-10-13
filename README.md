@@ -119,14 +119,15 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
-| 1.5.1 | 13-10-2026 09:00 | Duplicate UANs in the wage register are flagged and block ECR generation |
-| 1.5.0 | 13-10-2026 08:40 | On desktop only the wage rows scroll; header, establishment code / wage month and challan summary stay in place |
-| 1.4.2 | 13-10-2026 08:15 | Compact header and challan summary so the summary fits on screen; outdated "Prototype" note removed |
-| 1.4.1 | 13-10-2026 07:50 | Suggestions email also on the registration form; browsers reload style/script files on each new version |
-| 1.4.0 | 13-10-2026 07:30 | Higher EPF "Employee only": employer share restricted to the ceiling wage |
-| 1.3.1 | 12-10-2026 21:35 | Suggestions email (raghu.epf@gmail.com) at the top middle |
-| 1.3.0 | 12-10-2026 21:20 | Signed-in name and email at the top right, with a Log out button |
-| 1.2.6 | 12-10-2026 21:00 | Version number shown on the page |
+| 1.5.2 | 13-10-2026 08:17 | Release times corrected to the actual commit times |
+| 1.5.1 | 13-10-2026 08:13 | Duplicate UANs in the wage register are flagged and block ECR generation |
+| 1.5.0 | 13-10-2026 08:05 | On desktop only the wage rows scroll; header, establishment code / wage month and challan summary stay in place |
+| 1.4.2 | 13-10-2026 07:55 | Compact header and challan summary so the summary fits on screen; outdated "Prototype" note removed |
+| 1.4.1 | 13-10-2026 07:43 | Suggestions email also on the registration form; browsers reload style/script files on each new version |
+| 1.4.0 | 13-10-2026 07:34 | Higher EPF "Employee only": employer share restricted to the ceiling wage |
+| 1.3.1 | 12-10-2026 21:29 | Suggestions email (raghu.epf@gmail.com) at the top middle |
+| 1.3.0 | 12-10-2026 21:25 | Signed-in name and email at the top right, with a Log out button |
+| 1.2.6 | 12-10-2026 20:56 | Version number shown on the page |
 | 1.2.5 | 12-10-2026 20:51 | Amount cells open blank on click; blank keeps the old value |
 | 1.2.4 | 12-10-2026 20:46 | Tab / Shift+Tab move between columns |
 | 1.2.3 | 12-10-2026 20:42 | Template downloads with the .xlsx extension |

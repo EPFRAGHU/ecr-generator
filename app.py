@@ -50,10 +50,11 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 # Release shown under "Employer Module". Bump on every release:
 # MAJOR.MINOR for a feature release, the last number (sub-version) for a
-# fix or small change; set APP_BUILD to the release date and time (IST).
+# fix or small change; set APP_BUILD to the actual date and time (IST)
+# of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.5.1"
-APP_BUILD = "13-10-2026 09:00 IST"
+APP_VERSION = "1.5.2"
+APP_BUILD = "13-10-2026 08:17 IST"
 
 
 @app.context_processor
