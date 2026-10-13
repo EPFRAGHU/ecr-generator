@@ -322,6 +322,8 @@
     white-space: nowrap;
   }
   table.ledger th.left{ text-align:left; }
+  .register-col{ flex: 1; min-width: 0; }
+  .ledger-scroll{ overflow-x: auto; }
   table.ledger td{
     padding: 7px 8px;
     border-bottom: 1px solid var(--rule-faint);
@@ -649,4 +651,33 @@
   color: var(--stamp);
   display:block;
   margin-top: 2px;
+}
+
+/* Desktop: the page itself doesn't scroll. The header, establishment
+   code / wage month strip and challan summary stay put; only the wage
+   (or exit) rows scroll, inside their card, with the column headings
+   pinned. Phones and narrow windows keep normal page scrolling.
+   Kept last so it overrides the panel/layout rules above. */
+@media (min-width: 881px){
+  body{
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 12px;
+  }
+  .layout{ flex: 1; min-height: 0; align-items: stretch; }
+  .register-col{ display: flex; flex-direction: column; min-height: 0; }
+  .wage-panel.active, .exit-panel.active{
+    display: flex; flex-direction: column; flex: 1; min-height: 0;
+  }
+  .register{ display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .ledger-scroll{ flex: 1; min-height: 0; overflow: auto; }
+  table.ledger thead th{
+    position: sticky; top: 0; z-index: 1;
+    background: var(--white-ish);
+  }
+  /* The summary gets its own scroll only if the window is shorter than it */
+  .stub{ align-self: flex-start; max-height: 100%; overflow-y: auto; }
 }

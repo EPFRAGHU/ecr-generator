@@ -116,6 +116,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.5.0 | 13-10-2026 08:40 | On desktop only the wage rows scroll; header, establishment code / wage month and challan summary stay in place |
 | 1.4.2 | 13-10-2026 08:15 | Compact header and challan summary so the summary fits on screen; outdated "Prototype" note removed |
 | 1.4.1 | 13-10-2026 07:50 | Suggestions email also on the registration form; browsers reload style/script files on each new version |
 | 1.4.0 | 13-10-2026 07:30 | Higher EPF "Employee only": employer share restricted to the ceiling wage |
