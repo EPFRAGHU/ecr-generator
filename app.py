@@ -52,8 +52,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # MAJOR.MINOR for a feature release, the last number (sub-version) for a
 # fix or small change; set APP_BUILD to the release date and time (IST).
 # History is in README.md under "Version history".
-APP_VERSION = "1.4.1"
-APP_BUILD = "13-10-2026 07:50 IST"
+APP_VERSION = "1.4.2"
+APP_BUILD = "13-10-2026 08:15 IST"
 
 
 @app.context_processor
