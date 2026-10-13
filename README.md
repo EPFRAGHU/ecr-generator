@@ -116,6 +116,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.4.1 | 13-10-2026 07:50 | Suggestions email also on the registration form; browsers reload style/script files on each new version |
 | 1.4.0 | 13-10-2026 07:30 | Higher EPF "Employee only": employer share restricted to the ceiling wage |
 | 1.3.1 | 12-10-2026 21:35 | Suggestions email (raghu.epf@gmail.com) at the top middle |
 | 1.3.0 | 12-10-2026 21:20 | Signed-in name and email at the top right, with a Log out button |

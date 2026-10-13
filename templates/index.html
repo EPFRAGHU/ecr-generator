@@ -6,7 +6,7 @@
 <title>EPFO Monthly ECR Generator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=app_version) }}">
 </head>
 <body class="{{ '' if registered else 'gated' }}">
 
@@ -38,6 +38,10 @@
     <span class="reg-err" data-err="consent"></span>
     <p class="reg-err reg-err-main" id="reg-error"></p>
     <button class="btn-generate" type="submit" id="reg-submit">Continue to the app</button>
+    <p class="reg-feedback">
+      Suggestions or improvements? Write to
+      <a href="mailto:raghu.epf@gmail.com?subject=ECR%20Generator%20suggestion">raghu.epf@gmail.com</a>
+    </p>
   </form>
 </div>
 
@@ -235,6 +239,6 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ url_for('static', filename='app.js', v=app_version) }}"></script>
 </body>
 </html>
