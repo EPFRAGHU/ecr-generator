@@ -40,27 +40,41 @@ function calc(row){
   //   E = employee only: employee 12% on the actual wage, employer 12%
   //       restricted to the ceiling wage (EPS 8.33% of it, rest as diff).
   //   N = EPF wages capped at the ceiling for both (the default).
-  const mode = higherMode(row);
-  let cappedW, epsW, edliW;
+  // Higher pension (row.hp = 'Y', EPS members only): joint option for
+  // pension on higher wages accepted. EPF on the actual wage for both, EPS
+  // wages = actual wage, EPS contribution = 8.33% of it + 1.16% of the part
+  // above the ceiling, all from the employer's 12%. EDLI stays capped.
+  const hp = hasHigherPension(row);
+  const mode = hp ? 'Y' : higherMode(row);
+  let cappedW, epsW, edliW, excess = 0;
   if(month === SPLIT_MONTH){
     const old = Math.min(w, OLD_CEILING), neu = Math.min(w, NEW_CEILING);
     const split = old*SPLIT_BEFORE + neu*SPLIT_AFTER;
+    // Wage above the ceiling for each part of the month (higher pension)
+    const overOld = Math.max(w - OLD_CEILING, 0), overNew = Math.max(w - NEW_CEILING, 0);
     edliW = split;
     if(epsMember && row.sep === 'new'){
       // Covered only from 17th: wages for 17-30 Sep only.
       cappedW = neu*SPLIT_AFTER;
       epsW = edliW = neu*SPLIT_AFTER;
+      if(hp){ epsW = w*SPLIT_AFTER; excess = overNew*SPLIT_AFTER; }
     }else{
       cappedW = split;
       if(!epsMember) epsW = 0;
-      else if(row.sep === 'noeps') epsW = neu*SPLIT_AFTER;
-      else epsW = split;
+      else if(row.sep === 'noeps'){
+        epsW = neu*SPLIT_AFTER;
+        if(hp){ epsW = w*SPLIT_AFTER; excess = overNew*SPLIT_AFTER; }
+      }else{
+        epsW = split;
+        if(hp){ epsW = w; excess = overOld*SPLIT_BEFORE + overNew*SPLIT_AFTER; }
+      }
     }
   }else{
     const ceiling = ceilingFor(month);
     cappedW = Math.min(w, ceiling);
     epsW = epsMember ? Math.min(w, ceiling) : 0;
     edliW = Math.min(w, ceiling);
+    if(hp){ epsW = w; excess = Math.max(w - ceiling, 0); }
   }
   const fullW = (month === SPLIT_MONTH && epsMember && row.sep === 'new') ? w*SPLIT_AFTER : w;
   const epfW = mode === 'N' ? cappedW : fullW;
@@ -71,7 +85,7 @@ function calc(row){
   const eeContri = roundHalfUp(epfW*0.12);
   const erContri = roundHalfUp(employerW*0.12);
   const vpf = vpfIssue(row.vpf) ? 0 : roundHalfUp(Number(row.vpf)||0);
-  const epsContri = roundHalfUp(epsW*0.0833);
+  const epsContri = roundHalfUp(epsW*0.0833 + excess*0.0116);
   return {
     epfW: roundHalfUp(epfW), eps: roundHalfUp(epsW), edli: roundHalfUp(edliW),
     vpf, epfContri: eeContri + vpf, epsContri, diff: erContri - epsContri,
@@ -102,6 +116,29 @@ function renderBulkHigher(){
     btn.setAttribute('aria-pressed', on);
   });
   document.getElementById('bulk-higher-note').textContent = state === 'mixed' ? 'mixed' : '';
+}
+
+// Higher pension: EPS members only, and it puts EPF on the actual wage, so
+// a higher-pension row's Higher EPF is "Yes (both)" and locked.
+// Keep in sync with row_higher_pension() in app.py.
+const hasHigherPension = row => row.eps !== 'N' && String(row.hp ?? 'N').trim().toUpperCase() === 'Y';
+let defaultHp = 'N';
+
+function setHigherPension(row, value){
+  row.hp = value;
+  if(value === 'Y') row.higher = 'Y';
+}
+
+function renderBulkHp(){
+  const members = wageRows.filter(r => r.eps !== 'N');
+  const flags = new Set(members.map(r => hasHigherPension(r) ? 'Y' : 'N'));
+  const state = flags.size === 1 ? [...flags][0] : (flags.size ? 'mixed' : defaultHp);
+  document.querySelectorAll('[data-hp-all]').forEach(btn=>{
+    const on = btn.dataset.hpAll === state;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', on);
+  });
+  document.getElementById('bulk-hp-note').textContent = state === 'mixed' ? 'mixed' : '';
 }
 
 function isValidUAN(uan){ return /^\d{12}$/.test(String(uan||'').trim()); }
@@ -160,8 +197,11 @@ function renderWageTable(){
     if(rowHasIssue(row)) tr.classList.add('issue-row');
     const epsOpts = [['Y','Yes'],['N','No']].map(([v,l])=>
       `<option value="${v}" ${(row.eps||'Y')===v?'selected':''}>${l}</option>`).join('');
+    const hp = hasHigherPension(row);
     const higherOpts = Object.entries(HIGHER_MODES).map(([v,l])=>
-      `<option value="${v}" ${higherMode(row)===v?'selected':''}>${l}</option>`).join('');
+      `<option value="${v}" ${(hp ? 'Y' : higherMode(row))===v?'selected':''}>${l}</option>`).join('');
+    const hpOpts = [['N','No'],['Y','Yes']].map(([v,l])=>
+      `<option value="${v}" ${(hp ? 'Y' : 'N')===v?'selected':''}>${l}</option>`).join('');
     const sepOpts = Object.entries(SEP_BASES).map(([v,l])=>
       `<option value="${v}" ${(row.sep||'cap')===v?'selected':''}>${l}</option>`).join('');
     const epfNote = c.epfW !== Math.round(Number(row.epf)||0)
@@ -174,8 +214,9 @@ function renderWageTable(){
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="epf" data-i="${i}">${row.epf}${epfNote}</td>
       <td class="editable input-box" contenteditable="true" inputmode="numeric" data-field="ncp" data-i="${i}">${row.ncp ?? 0}${ncpBad ? `<span class="issue-note">${ncpBad}</span>` : ''}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="vpf" data-i="${i}">${row.vpf ?? 0}${vpfBad ? `<span class="issue-note">${vpfBad}</span>` : ''}</td>
-      <td><select class="cell-select" data-sfield="higher" data-i="${i}">${higherOpts}</select></td>
+      <td><select class="cell-select" data-sfield="higher" data-i="${i}" ${hp ? 'disabled title="Set by Higher pension"' : ''}>${higherOpts}</select></td>
       <td><select class="cell-select" data-sfield="eps" data-i="${i}">${epsOpts}</select></td>
+      <td><select class="cell-select" data-sfield="hp" data-i="${i}" ${row.eps==='N' ? 'disabled title="EPS members only"' : ''}>${hpOpts}</select></td>
       <td class="split-col"><select class="cell-select" data-sfield="sep" data-i="${i}" ${row.eps==='N'?'disabled':''}>${sepOpts}</select></td>
       <td class="calc">${fmt(c.eps)}</td>
       <td class="calc">${fmt(c.edli)}</td>
@@ -189,6 +230,7 @@ function renderWageTable(){
   });
   document.getElementById('wage-count').textContent = `${wageRows.length} entries`;
   renderBulkHigher();
+  renderBulkHp();
 
   tbody.querySelectorAll('.editable').forEach(cell=>{
     cell.addEventListener('blur', onWageEdit);
@@ -202,7 +244,9 @@ function renderWageTable(){
   });
   tbody.querySelectorAll('.cell-select').forEach(sel=>{
     sel.addEventListener('change', ()=>{
-      wageRows[Number(sel.dataset.i)][sel.dataset.sfield] = sel.value;
+      const row = wageRows[Number(sel.dataset.i)];
+      if(sel.dataset.sfield === 'hp') setHigherPension(row, sel.value);
+      else row[sel.dataset.sfield] = sel.value;
       rerenderKeepingFocus(sel);
     });
   });
@@ -442,14 +486,30 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 });
 
 document.getElementById('add-row-btn').addEventListener('click', ()=>{
-  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, vpf:0, refund:0, higher:defaultHigher, eps:'Y', sep:'cap'});
+  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, vpf:0, refund:0, ...newRowFlags()});
   renderWageTable();
   renderStub();
 });
+// Higher EPF / higher pension for new and uploaded rows: the last choice
+// made with the all-members switches.
+function newRowFlags(){
+  const row = {higher: defaultHigher, eps: 'Y', sep: 'cap'};
+  setHigherPension(row, defaultHp);
+  return row;
+}
 document.querySelectorAll('[data-higher-all]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     defaultHigher = btn.dataset.higherAll;
-    wageRows.forEach(r => { r.higher = defaultHigher; });
+    // Higher-pension rows keep "Yes (both)"
+    wageRows.forEach(r => { if(!hasHigherPension(r)) r.higher = defaultHigher; });
+    renderWageTable();
+    renderStub();
+  });
+});
+document.querySelectorAll('[data-hp-all]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    defaultHp = btn.dataset.hpAll;
+    wageRows.forEach(r => { if(r.eps !== 'N') setHigherPension(r, defaultHp); });
     renderWageTable();
     renderStub();
   });
@@ -467,6 +527,7 @@ document.getElementById('clear-all-btn').addEventListener('click', ()=>{
   exitRows = [];
   pendingUploadFile = null;
   defaultHigher = 'N';
+  defaultHp = 'N';
   renderWageTable();
   renderExitTable();
   renderStub();
@@ -610,7 +671,7 @@ function importRows(rows, issues){
     ncp: isNaN(Number(r.ncp)) ? r.ncp : Number(r.ncp),
     vpf: isNaN(Number(r.vpf)) ? r.vpf : Number(r.vpf),
     refund: Number(r.refund)||0,
-    higher: defaultHigher, eps: 'Y', sep: 'cap',
+    ...newRowFlags(),
   }));
   wageRows.push(...added);
   // Checked after all rows are in, so duplicates within the file and

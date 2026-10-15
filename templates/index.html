@@ -95,14 +95,24 @@
       <div class="register">
         <div class="register-head">
           <h2>Employee Wages</h2>
-          <div class="bulk-higher" role="group" aria-labelledby="bulk-higher-label">
-            <span id="bulk-higher-label">Higher EPF for all members</span>
-            <div class="seg">
-              <button type="button" class="seg-btn" data-higher-all="Y">Yes (both)</button>
-              <button type="button" class="seg-btn" data-higher-all="E">Employee only</button>
-              <button type="button" class="seg-btn" data-higher-all="N">No</button>
+          <div class="bulk-higher">
+            <div class="bulk-group" role="group" aria-labelledby="bulk-higher-label">
+              <span id="bulk-higher-label">Higher EPF for all members</span>
+              <div class="seg">
+                <button type="button" class="seg-btn" data-higher-all="Y">Yes (both)</button>
+                <button type="button" class="seg-btn" data-higher-all="E">Employee only</button>
+                <button type="button" class="seg-btn" data-higher-all="N">No</button>
+              </div>
+              <span class="bulk-note" id="bulk-higher-note"></span>
             </div>
-            <span class="bulk-note" id="bulk-higher-note"></span>
+            <div class="bulk-group" role="group" aria-labelledby="bulk-hp-label">
+              <span id="bulk-hp-label" title="Pension on higher wages: joint option accepted. EPS on the actual wage (8.33% + 1.16% above the ceiling, from the employer's 12%); sets Higher EPF to Yes (both).">Higher pension for all EPS members</span>
+              <div class="seg">
+                <button type="button" class="seg-btn" data-hp-all="Y">Yes</button>
+                <button type="button" class="seg-btn" data-hp-all="N">No</button>
+              </div>
+              <span class="bulk-note" id="bulk-hp-note"></span>
+            </div>
           </div>
           <span class="count" id="wage-count">14 entries</span>
         </div>
@@ -119,6 +129,7 @@
               <th title="Voluntary PF, in rupees, on top of the 12% employee share">VPF (₹)</th>
               <th>Higher EPF</th>
               <th>EPS member</th>
+              <th title="Pension on higher wages: joint option accepted. EPS wages = actual wage; EPS contribution 8.33% + 1.16% of the part above the ceiling, from the employer's 12%. EPS members only.">Higher pension</th>
               <th class="split-col">1–16 Sep status</th>
               <th>EPS wages</th>
               <th>EDLI wages</th>

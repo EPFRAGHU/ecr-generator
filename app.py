@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.6.2"
-APP_BUILD = "15-10-2026 15:28 IST"
+APP_VERSION = "1.7.0"
+APP_BUILD = "15-10-2026 15:46 IST"
 
 
 @app.context_processor
@@ -372,7 +372,13 @@ HIGHER_MODES = {
 
 
 def calc_row(
-    epf, wage_month="", eps_member=True, sep_basis="cap", higher="N", vpf=0
+    epf,
+    wage_month="",
+    eps_member=True,
+    sep_basis="cap",
+    higher="N",
+    vpf=0,
+    higher_pension=False,
 ) -> dict:
     """
     `epf` is the member's full-month EPF wages. `higher` is a HIGHER_MODES
@@ -393,12 +399,21 @@ def calc_row(
     `vpf` is the voluntary PF amount in rupees. It is remitted with the
     employee share, so it is added to the EPF contribution but not to the
     employer's diff.
+
+    `higher_pension` is for an EPS member whose joint option for pension on
+    higher wages has been accepted. EPF is then on the actual wage for both
+    (mode "Y"), EPS wages are the actual wage, and the EPS contribution is
+    8.33% of it plus 1.16% of the part above the ceiling, all out of the
+    employer's 12%. EDLI wages stay capped.
     """
     if higher is True:
         higher = "Y"
     elif higher is False:
         higher = "N"
     mode = higher if higher in HIGHER_MODES else "N"
+    hp = bool(higher_pension) and eps_member
+    if hp:
+        mode = "Y"
 
     w = float(epf or 0)
     full_w = w
@@ -407,32 +422,44 @@ def calc_row(
         f2 = SPLIT_DAYS_AFTER / SPLIT_DAYS_TOTAL
         old, new = min(w, OLD_CEILING), min(w, NEW_CEILING)
         split = old * f1 + new * f2
+        # Wage above the ceiling for each part of the month (higher pension)
+        over_old, over_new = max(w - OLD_CEILING, 0), max(w - NEW_CEILING, 0)
         edli_w = split
+        excess = 0.0
         if eps_member and sep_basis == "new":
             # Covered only from 17th: wages for 17-30 Sep only.
             full_w = w * f2
             capped_w = new * f2
             eps_w = edli_w = new * f2
+            if hp:
+                eps_w, excess = w * f2, over_new * f2
         else:
             capped_w = split
             if not eps_member:
                 eps_w = 0.0
             elif sep_basis == "noeps":
                 eps_w = new * f2
+                if hp:
+                    eps_w, excess = w * f2, over_new * f2
             else:  # "cap"
                 eps_w = split
+                if hp:
+                    eps_w, excess = w, over_old * f1 + over_new * f2
     else:
         ceiling = ceiling_for(wage_month)
         capped_w = min(w, ceiling)
         eps_w = min(w, ceiling) if eps_member else 0.0
         edli_w = min(w, ceiling)
+        excess = 0.0
+        if hp:
+            eps_w, excess = w, max(w - ceiling, 0)
 
     epf_w = capped_w if mode == "N" else full_w
     employer_w = full_w if mode == "Y" else capped_w
 
     ee_contri = round_half_up(epf_w * 0.12)
     er_contri = round_half_up(employer_w * 0.12)
-    eps_contri = round_half_up(eps_w * 0.0833)
+    eps_contri = round_half_up(eps_w * 0.0833 + excess * 0.0116)
     return {
         "epf_wages": round_half_up(epf_w),
         "eps_wages": round_half_up(eps_w),
@@ -491,6 +518,10 @@ def row_eps_member(row: dict) -> bool:
 def row_higher_epf(row: dict) -> str:
     mode = str(row.get("higher", "N")).strip().upper()
     return mode if mode in HIGHER_MODES else "N"
+
+
+def row_higher_pension(row: dict) -> bool:
+    return str(row.get("hp", "N")).strip().upper() == "Y"
 
 
 def row_sep_basis(row: dict) -> str:
@@ -711,6 +742,7 @@ def generate_ecr():
             row_sep_basis(row),
             row_higher_epf(row),
             float(row.get("vpf") or 0),
+            row_higher_pension(row),
         )
         ncp = int(row.get("ncp") or 0)
         refund = row.get("refund") or 0

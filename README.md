@@ -91,6 +91,16 @@ minutes. Visitors stay registered on their device for a year.
   The "Higher EPF for all members" switch above the wage table sets every
   row at once; new and uploaded rows follow the last choice, and each
   row's dropdown can still be changed (the switch shows "mixed" then).
+- **Higher pension** — for EPS members whose joint option for pension on
+  higher wages has been accepted. "Yes" on a row (or the "Higher pension
+  for all EPS members" switch) makes EPS wages the actual wage and the EPS
+  contribution 8.33% of it plus 1.16% of the part above the ceiling, all
+  out of the employer's 12% (the rest is the diff). It also sets Higher
+  EPF to "Yes (both)" and locks that dropdown. EDLI wages stay capped. In
+  September 2026 the 1.16% is on the part above ₹15,000 for 1–16 Sep and
+  above ₹25,000 for 17–30 Sep. Example, October 2026, actual wage ₹40,000:
+  EPF/EPS wages 40,000, EDLI wages 25,000, EPF contribution 4,800, EPS
+  3,332 + 174 = 3,506, diff 1,294.
 
   EPS and EDLI wages are always capped, so the EPS contribution is
   restricted to 8.33% of the ceiling and the rest of the employer's share
@@ -126,6 +136,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.7.0 | 15-10-2026 15:46 | Higher pension per EPS member and for all EPS members: EPS on the actual wage (8.33% + 1.16% above the ceiling, from the employer's 12%); sets Higher EPF to Yes (both) |
 | 1.6.2 | 15-10-2026 15:28 | Challan summary is as tall as the wage register on desktop, with the grand total and Generate buttons at the bottom |
 | 1.6.1 | 15-10-2026 15:18 | "Clear all" button empties the wage and exit registers after a confirmation |
 | 1.6.0 | 15-10-2026 15:04 | Higher EPF defaults to No (EPF, EPS and EDLI wages match); "Higher EPF for all members" switch sets every row at once |
