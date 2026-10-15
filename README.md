@@ -73,7 +73,9 @@ minutes. Visitors stay registered on their device for a year.
   "Download template" (`/api/template`) gives an Excel file with the
   expected headers — UAN, Member name, Gross wages, EPF wages, NCP days,
   VPF, Refund of advances — and an Instructions sheet; a filled-in
-  template uploads without the mapping step.
+  template uploads without the mapping step. "Clear all" (after a
+  confirmation) empties the wage and exit registers, whether entered or
+  imported; the establishment code and wage month are kept.
 - **Wage ceiling** — follows S.O. 5109(E): ₹15,000 up to August 2026,
   ₹25,000 from October 2026. September 2026 is a split month (1–16 Sep at
   ₹15,000, 17–30 Sep at ₹25,000, pro rata by days, single ECR) per the EPFO
@@ -124,6 +126,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.6.1 | 15-10-2026 15:18 | "Clear all" button empties the wage and exit registers after a confirmation |
 | 1.6.0 | 15-10-2026 15:04 | Higher EPF defaults to No (EPF, EPS and EDLI wages match); "Higher EPF for all members" switch sets every row at once |
 | 1.5.2 | 13-10-2026 08:17 | Release times corrected to the actual commit times |
 | 1.5.1 | 13-10-2026 08:13 | Duplicate UANs in the wage register are flagged and block ECR generation |

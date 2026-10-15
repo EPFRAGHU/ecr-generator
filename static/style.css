@@ -457,6 +457,8 @@
   }
   .btn:hover{ background: var(--paper-deep); }
   .btn.ghost{ border-style: dashed; }
+  .btn.danger{ color: var(--stamp); border-color: var(--stamp); }
+  .btn.danger:hover{ background: var(--stamp); color: var(--white-ish); }
   a.btn{ text-decoration: none; display: inline-flex; align-items: center; }
   .legend{
     font-size: 11px;

@@ -454,6 +454,24 @@ document.querySelectorAll('[data-higher-all]').forEach(btn=>{
     renderStub();
   });
 });
+// Clear all: empties the wage and exit registers (entered or imported).
+// Establishment code and wage month are kept.
+document.getElementById('clear-all-btn').addEventListener('click', ()=>{
+  if(!wageRows.length && !exitRows.length){
+    showToast('Nothing to clear');
+    return;
+  }
+  const what = `${wageRows.length} wage row${wageRows.length === 1 ? '' : 's'} and ${exitRows.length} exit row${exitRows.length === 1 ? '' : 's'}`;
+  if(!confirm(`Clear all ${what}? This cannot be undone.`)) return;
+  wageRows = [];
+  exitRows = [];
+  pendingUploadFile = null;
+  defaultHigher = 'N';
+  renderWageTable();
+  renderExitTable();
+  renderStub();
+  showToast('Cleared — register is empty');
+});
 document.getElementById('add-exit-btn').addEventListener('click', ()=>{
   const today = new Date().toISOString().slice(0,10);
   exitRows.push({uan:"", name:"New exit", date: today, code:"S"});
