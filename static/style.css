@@ -717,6 +717,13 @@
     position: sticky; top: 0; z-index: 1;
     background: var(--white-ish);
   }
-  /* The summary gets its own scroll only if the window is shorter than it */
-  .stub{ align-self: flex-start; max-height: 100%; overflow-y: auto; }
+  /* The summary matches the wage card's height, with the grand total and
+     Generate buttons at the bottom; it scrolls only if the window is
+     shorter than its contents. */
+  .stub{
+    align-self: stretch; max-height: 100%; overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .stub > *{ flex-shrink: 0; }
+  .stub-grand{ margin-top: auto; }
 }

@@ -126,6 +126,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.6.2 | 15-10-2026 15:28 | Challan summary is as tall as the wage register on desktop, with the grand total and Generate buttons at the bottom |
 | 1.6.1 | 15-10-2026 15:18 | "Clear all" button empties the wage and exit registers after a confirmation |
 | 1.6.0 | 15-10-2026 15:04 | Higher EPF defaults to No (EPF, EPS and EDLI wages match); "Higher EPF for all members" switch sets every row at once |
 | 1.5.2 | 13-10-2026 08:17 | Release times corrected to the actual commit times |
