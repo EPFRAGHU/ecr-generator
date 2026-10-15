@@ -65,6 +65,15 @@ minutes. Visitors stay registered on their device for a year.
 
 ## What it does
 
+- **Import ECR file** — loads an ECR text file (`#~#` format, 11 fields) back
+  into the wage register. Each line is worked back to the full-month EPF
+  wage and the member's options (EPS member, higher EPF, higher pension,
+  VPF, September 2026 status) so that generating the ECR again reproduces
+  the line exactly; a line that can't be reproduced is imported with a note
+  listing the figures that will be recalculated. The establishment code and
+  wage month are read from the file name when present
+  (`ORBBS2012397000_ECR_SEP_2026_BATCH2.txt`, `ORBBS0017675000202609.txt`),
+  otherwise the page's wage month is used.
 - **Wage Register tab** — manual row entry or Excel/CSV upload. Uploads are
   auto-matched to UAN / Name / Gross Wages / EPF Wages by header name; if a
   required column can't be matched, a mapping step appears so you can pick it
@@ -136,6 +145,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.8.0 | 15-10-2026 23:30 | "Import ECR file (.txt)" loads an ECR text file back into the wage register, working out each member's full-month wage and options; establishment code and wage month read from the file name |
 | 1.7.1 | 15-10-2026 16:01 | Challan summary shows the higher pension 1.16% in small type under Er share and EPS total |
 | 1.7.0 | 15-10-2026 15:46 | Higher pension per EPS member and for all EPS members: EPS on the actual wage (8.33% + 1.16% above the ceiling, from the employer's 12%); sets Higher EPF to Yes (both) |
 | 1.6.2 | 15-10-2026 15:28 | Challan summary is as tall as the wage register on desktop, with the grand total and Generate buttons at the bottom |

@@ -146,6 +146,11 @@ function renderBulkHp(){
 
 function isValidUAN(uan){ return /^\d{12}$/.test(String(uan||'').trim()); }
 
+// Names and UANs come from uploaded files, so escape them before they go
+// into innerHTML.
+const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+
 function daysInMonth(month){
   const m = /^(\d{4})-(\d{2})$/.exec(month || '');
   return m ? new Date(Number(m[1]), Number(m[2]), 0).getDate() : 31;
@@ -211,8 +216,8 @@ function renderWageTable(){
       ? `<span class="calc-note" contenteditable="false">ECR: ${fmt(c.epfW)}</span>` : '';
     tr.innerHTML = `
       <td class="rownum">${i+1}</td>
-      <td class="left editable" contenteditable="true" data-field="uan" data-i="${i}">${row.uan}${uanNote ? `<span class="issue-note">${uanNote}</span>` : ''}</td>
-      <td class="left editable" contenteditable="true" data-field="name" data-i="${i}">${row.name}</td>
+      <td class="left editable" contenteditable="true" data-field="uan" data-i="${i}">${escapeHtml(row.uan)}${uanNote ? `<span class="issue-note">${uanNote}</span>` : ''}</td>
+      <td class="left editable" contenteditable="true" data-field="name" data-i="${i}">${escapeHtml(row.name)}${row.importNote ? `<span class="import-note" contenteditable="false" title="This line of the imported ECR file does not match this tool's calculation. Generating the ECR will use the recalculated figures.">${escapeHtml(row.importNote)}</span>` : ''}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="gross" data-i="${i}">${row.gross}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="epf" data-i="${i}">${row.epf}${epfNote}</td>
       <td class="editable input-box" contenteditable="true" inputmode="numeric" data-field="ncp" data-i="${i}">${row.ncp ?? 0}${ncpBad ? `<span class="issue-note">${ncpBad}</span>` : ''}</td>
@@ -250,6 +255,7 @@ function renderWageTable(){
       const row = wageRows[Number(sel.dataset.i)];
       if(sel.dataset.sfield === 'hp') setHigherPension(row, sel.value);
       else row[sel.dataset.sfield] = sel.value;
+      delete row.importNote;
       rerenderKeepingFocus(sel);
     });
   });
@@ -267,7 +273,7 @@ const BLANK_ON_FOCUS = ['gross','epf','ncp','vpf','refund'];
 function onWageEdit(e){
   const i = Number(e.target.dataset.i);
   const field = e.target.dataset.field;
-  const note = e.target.querySelector('.issue-note, .calc-note');
+  const note = e.target.querySelector('.issue-note, .calc-note, .import-note');
   let val = e.target.textContent.replace(note ? note.textContent : '', '').trim();
   // A cell cleared on focus and left blank keeps its previous value.
   const keepOld = val === '' && BLANK_ON_FOCUS.includes(field);
@@ -275,7 +281,11 @@ function onWageEdit(e){
   // Keep a non-numeric NCP/VPF entry as typed so the row is flagged instead
   // of silently becoming 0.
   if(['ncp','vpf'].includes(field)){ val = val === '' ? 0 : (isNaN(Number(val)) ? val : Number(val)); }
-  if(!keepOld) wageRows[i][field] = val;
+  if(!keepOld && wageRows[i][field] !== val){
+    wageRows[i][field] = val;
+    // Edited by hand: the import's "recalculated" note no longer applies.
+    delete wageRows[i].importNote;
+  }
   // Tab/Shift+Tab/click has already moved focus to e.relatedTarget, which
   // the re-render is about to replace.
   rerenderKeepingFocus(e.relatedTarget);
@@ -475,11 +485,13 @@ document.getElementById('signout-btn').addEventListener('click', async ()=>{
   window.location.reload();
 });
 
-function showToast(msg){
+let toastTimer = null;
+function showToast(msg, ms = 2600){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2600);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), ms);
 }
 
 // ---------- tabs ----------
@@ -696,6 +708,76 @@ function importRows(rows, issues){
     showToast(`Imported ${rows.length} rows`);
   }
 }
+
+// ---------- ECR text file import ----------
+// The server works each ECR line back to the full-month EPF wage and the
+// member's options, so the register reproduces the file exactly. Lines it
+// can't reproduce come back with a note saying which figures will change.
+const importEcrInput = document.getElementById('import-ecr-input');
+document.getElementById('import-ecr-btn').addEventListener('click', ()=> importEcrInput.click());
+importEcrInput.addEventListener('change', async ()=>{
+  const file = importEcrInput.files[0];
+  importEcrInput.value = '';
+  if(!file) return;
+
+  let replace = false;
+  if(wageRows.length){
+    replace = confirm(`The wage register already has ${wageRows.length} row${wageRows.length === 1 ? '' : 's'}.\n\n`
+      + 'OK — replace them with the rows from this ECR file\n'
+      + 'Cancel — add the ECR rows below them');
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('wage_month', wageMonth());
+  let resp;
+  try{
+    resp = await fetch('/api/import-ecr', { method:'POST', body: formData });
+  }catch(err){
+    showToast('Import failed — could not reach the server');
+    return;
+  }
+  if(handleNeedsRegistration(resp)) return;
+  const data = await resp.json().catch(()=>({error:'Import failed'}));
+  if(!resp.ok){
+    showToast(data.error || 'Import failed');
+    return;
+  }
+
+  const changed = [];
+  if(data.estab_code && data.estab_code !== document.getElementById('estab-code').value.trim()){
+    document.getElementById('estab-code').value = data.estab_code;
+    changed.push(`establishment ${data.estab_code}`);
+  }
+  const monthName = m => new Date(m + '-01').toLocaleString('en-IN', {month:'long', year:'numeric'});
+  if(data.wage_month !== wageMonth()){
+    // Assigned directly so the fallback month picker shows it too.
+    document.getElementById('wage-month').value = data.wage_month;
+    changed.push(`wage month ${monthName(data.wage_month)}`);
+  }
+
+  const added = data.rows.map(r=>{
+    const row = {
+      uan: r.uan, name: r.name, gross: r.gross, epf: r.epf,
+      ncp: r.ncp, vpf: r.vpf, refund: r.refund,
+      eps: r.eps, sep: r.sep, higher: r.higher, hp: r.hp,
+    };
+    if(r.note) row.importNote = r.note;
+    return row;
+  });
+  if(replace) wageRows = added;
+  else wageRows.push(...added);
+  renderWageTable();
+  renderStub();
+
+  const parts = [`Imported ${added.length} row${added.length === 1 ? '' : 's'}`];
+  const noted = added.filter(r=>r.importNote).length;
+  if(noted) parts.push(`${noted} recalculated (see note under the name)`);
+  if(data.skipped.length) parts.push(`${data.skipped.length} line${data.skipped.length === 1 ? '' : 's'} skipped — ${data.skipped[0]}`);
+  if(changed.length) parts.push(`set ${changed.join(' and ')} from the file name`);
+  else if(!data.month_from_file) parts.push(`read as ${monthName(data.wage_month)} wages — if that's wrong, change the wage month and import again`);
+  showToast(parts.join('; '), 7000);
+});
 
 // ---------- mapping modal ----------
 const FIELD_LABELS = {

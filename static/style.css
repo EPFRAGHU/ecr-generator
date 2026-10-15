@@ -695,6 +695,14 @@
   display:block;
   margin-top: 2px;
 }
+/* ECR import: this line will be recalculated (not an error, so not red) */
+.import-note{
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--gold);
+  white-space: normal;
+}
 
 /* Desktop: the page itself doesn't scroll. The header, establishment
    code / wage month strip and challan summary stay put; only the wage

@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.7.1"
-APP_BUILD = "15-10-2026 16:01 IST"
+APP_VERSION = "1.8.0"
+APP_BUILD = "15-10-2026 23:30 IST"
 
 
 @app.context_processor
@@ -96,7 +96,7 @@ MAX_REGISTRATIONS_PER_HOUR = 10
 _registrations_by_ip: dict[str, list[float]] = {}
 
 ADMIN_ENDPOINTS = {"admin", "admin_export", "admin_delete"}
-REGISTERED_ENDPOINTS = {"upload", "generate_ecr", "generate_exit"}
+REGISTERED_ENDPOINTS = {"upload", "import_ecr", "generate_ecr", "generate_exit"}
 
 
 def _recent(log: dict[str, list[float]], ip: str, window: float) -> list[float]:
@@ -557,6 +557,154 @@ def _whole_number_text(val: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# ECR text file import
+#
+# An ECR line has 11 #~#-separated fields: UAN, name, gross wages, EPF
+# wages, EPS wages, EDLI wages, EPF contribution (employee, incl. VPF), EPS
+# contribution, EPF diff (employer), NCP days, refund of advances.
+#
+# The register holds the full-month EPF wage plus the member's options
+# (EPS member, higher EPF, higher pension, September 2026 status), so each
+# line is worked back to the inputs that make calc_row() reproduce it
+# exactly. A line no combination reproduces is still imported, with a note.
+# ---------------------------------------------------------------------------
+ECR_FIELD_COUNT = 11
+ECR_MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+              "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
+ESTAB_CODE_RE = re.compile(r"[A-Z]{5}\d{10}")
+
+
+def ecr_filename_hints(filename: str) -> tuple[str | None, str | None]:
+    """Establishment code and wage month (YYYY-MM) from an ECR file name,
+    e.g. ORBBS2012397000_ECR_SEP_2026_BATCH2.txt or ORBBS0017675000202609.txt."""
+    name = (filename or "").upper()
+    estab = ESTAB_CODE_RE.search(name)
+    month = None
+    m = re.search(r"(?<![A-Z])(" + "|".join(ECR_MONTHS) + r")[A-Z]*[_\-\s.]*(20\d{2})(?!\d)", name)
+    if m:
+        month = f"{m.group(2)}-{ECR_MONTHS.index(m.group(1)) + 1:02d}"
+    elif estab:
+        m = re.match(r"(20\d{2})(0[1-9]|1[0-2])(?!\d)", name[estab.end():])
+        if m:
+            month = f"{m.group(1)}-{m.group(2)}"
+    return (estab.group(0) if estab else None), month
+
+
+def parse_ecr_text(text: str) -> tuple[list[dict], list[str]]:
+    rows, problems = [], []
+    for n, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        parts = [p.strip() for p in line.split("#~#")]
+        if len(parts) != ECR_FIELD_COUNT:
+            problems.append(f"Line {n}: expected {ECR_FIELD_COUNT} fields, found {len(parts)}")
+            continue
+        uan, name, *nums = parts
+        try:
+            values = [int(float(v or 0)) for v in nums]
+        except ValueError:
+            problems.append(f"Line {n}: an amount is not a number")
+            continue
+        if any(v < 0 for v in values):
+            problems.append(f"Line {n}: negative amount")
+            continue
+        gross, epf, eps, edli, ee, eps_c, diff, ncp, refund = values
+        rows.append({
+            "line": n, "uan": uan, "name": name, "gross": gross,
+            "epf_wages": epf, "eps_wages": eps, "edli_wages": edli,
+            "epf_contri": ee, "eps_contri": eps_c, "diff": diff,
+            "ncp": ncp, "refund": refund,
+        })
+    return rows, problems
+
+
+def _flag_combos(split: bool) -> list[tuple[bool, str, str, bool]]:
+    """(eps_member, sep_basis, higher, higher_pension), most usual first."""
+    combos = []
+    for eps in (True, False):
+        for sep in (("cap", "noeps", "new") if split and eps else ("cap",)):
+            for higher in ("N", "E", "Y"):
+                for hp in ((False, True) if eps and higher == "Y" else (False,)):
+                    combos.append((eps, sep, higher, hp))
+    return combos
+
+
+def _wage_candidates(line: dict, wage_month: str) -> list[int]:
+    """Full-month EPF wages worth trying, most natural first."""
+    e, gross = line["epf_wages"], line["gross"]
+    cands = [e]
+    if wage_month == SPLIT_MONTH:
+        f1 = SPLIT_DAYS_BEFORE / SPLIT_DAYS_TOTAL
+        f2 = SPLIT_DAYS_AFTER / SPLIT_DAYS_TOTAL
+        # The gross wage is often the EPF wage; below the new ceiling it is
+        # the only value that splits back to exactly the ECR figure.
+        if gross <= NEW_CEILING:
+            cands.append(gross)
+        for inv in ((e - OLD_CEILING * f1) / f2, e / f2):  # 1-30 Sep / 17-30 Sep
+            base = math.floor(inv)
+            cands += [base, base + 1, base - 1, base + 2, base - 2]
+    cands.append(gross)
+    seen, out = set(), []
+    for c in cands:
+        if c >= 0 and c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
+def infer_ecr_row(line: dict, wage_month: str) -> dict:
+    """Register row (inputs + options) that reproduces one ECR line."""
+    target = {k: line[k] for k in ("epf_wages", "eps_wages", "edli_wages", "eps_contri", "diff")}
+    combos = _flag_combos(wage_month == SPLIT_MONTH)
+    cands = _wage_candidates(line, wage_month)
+    found = None
+    # First pass: no VPF. Second: allow VPF to explain a higher employee share.
+    for allow_vpf in (False, True):
+        for w in cands:
+            for eps, sep, higher, hp in combos:
+                c = calc_row(w, wage_month, eps, sep, higher, 0, hp)
+                if any(c[k] != v for k, v in target.items()):
+                    continue
+                vpf = line["epf_contri"] - c["epf_contri"]
+                if vpf == 0 or (allow_vpf and vpf > 0):
+                    found = (w, eps, sep, higher, hp, vpf)
+                    break
+            if found:
+                break
+        if found:
+            break
+
+    note = ""
+    if found:
+        w, eps, sep, higher, hp, vpf = found
+    else:
+        # Keep the file's EPF wage; say which figures this tool would change.
+        w, sep, higher, hp, vpf = line["epf_wages"], "cap", "N", False, 0
+        eps = line["eps_wages"] > 0 or line["epf_wages"] == 0
+        c = calc_row(w, wage_month, eps, sep, higher, 0, hp)
+        labels = {"epf_wages": "EPF wages", "eps_wages": "EPS wages",
+                  "edli_wages": "EDLI wages", "epf_contri": "EPF contri.",
+                  "eps_contri": "EPS contri.", "diff": "Diff"}
+        diffs = [f"{label} {line[k]}→{c[k]}" for k, label in labels.items() if c[k] != line[k]]
+        note = "Recalculated: " + ", ".join(diffs)
+
+    return {
+        "uan": re.sub(r"\D", "", line["uan"])[:12],
+        "name": line["name"],
+        "gross": line["gross"],
+        "epf": w,
+        "ncp": line["ncp"],
+        "vpf": vpf,
+        "refund": line["refund"],
+        "eps": "Y" if eps else "N",
+        "sep": sep,
+        "higher": higher,
+        "hp": "Y" if hp else "N",
+        "note": note,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 @app.route("/")
@@ -644,6 +792,42 @@ def upload():
             "issues": issues_by_row,
         }
     )
+
+
+@app.route("/api/import-ecr", methods=["POST"])
+def import_ecr():
+    """Read an ECR text file back into the wage register."""
+    file = request.files.get("file")
+    if file is None:
+        return jsonify({"error": "No file uploaded"}), 400
+    raw = file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+    if "#~#" not in text:
+        return jsonify({"error": "This is not an ECR text file (no #~# separators found)"}), 400
+
+    estab_code, file_month = ecr_filename_hints(file.filename)
+    page_month = request.form.get("wage_month", "")
+    wage_month = file_month or page_month
+    if not re.fullmatch(r"20\d{2}-(0[1-9]|1[0-2])", wage_month or ""):
+        return jsonify({"error": "Choose the wage month before importing"}), 400
+
+    lines, problems = parse_ecr_text(text)
+    if not lines:
+        return jsonify({"error": problems[0] if problems else "The file has no ECR lines"}), 400
+
+    rows = [infer_ecr_row(line, wage_month) for line in lines]
+    _log("import")
+    return jsonify({
+        "status": "ok",
+        "rows": rows,
+        "skipped": problems,
+        "wage_month": wage_month,
+        "month_from_file": bool(file_month),
+        "estab_code": estab_code,
+    })
 
 
 # Header names match FIELD_SYNONYMS, so a filled-in template uploads without
