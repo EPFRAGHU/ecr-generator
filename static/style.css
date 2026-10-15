@@ -394,6 +394,8 @@
     box-shadow: inset 0 0 0 1px var(--rule), inset 0 -2px 0 var(--stamp);
   }
   .stub-row.note .lbl, .stub-row.note .val{ font-style: italic; opacity: .8; }
+  .stub-row.note{ font-size: 10.5px; padding: 1px 0; }
+  .stub-row.sub.note .lbl{ font-size: 10.5px; padding-left: 20px; }
   .stub-row[hidden]{ display: none; }
   td.calc{
     color: var(--pencil);

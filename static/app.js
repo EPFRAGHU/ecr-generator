@@ -86,9 +86,12 @@ function calc(row){
   const erContri = roundHalfUp(employerW*0.12);
   const vpf = vpfIssue(row.vpf) ? 0 : roundHalfUp(Number(row.vpf)||0);
   const epsContri = roundHalfUp(epsW*0.0833 + excess*0.0116);
+  // Higher pension's 1.16% part of the EPS contribution (moved out of the
+  // employer's diff); shown separately in the challan summary.
+  const hp116 = epsContri - roundHalfUp(epsW*0.0833);
   return {
     epfW: roundHalfUp(epfW), eps: roundHalfUp(epsW), edli: roundHalfUp(edliW),
-    vpf, epfContri: eeContri + vpf, epsContri, diff: erContri - epsContri,
+    vpf, epfContri: eeContri + vpf, epsContri, diff: erContri - epsContri, hp116,
   };
 }
 
@@ -350,11 +353,12 @@ function onExitEdit(e){
 
 // ---------- challan stub ----------
 function renderStub(){
-  let gross=0, epfw=0, epsw=0, edliw=0, ac1ee=0, ac1er=0, ac10=0, vpf=0;
+  let gross=0, epfw=0, epsw=0, edliw=0, ac1ee=0, ac1er=0, ac10=0, vpf=0, hp116=0;
   wageRows.forEach(row=>{
     const c = calc(row);
     gross += Number(row.gross)||0;
     vpf += c.vpf;
+    hp116 += c.hp116;
     epfw += c.epfW;
     epsw += c.eps;
     edliw += c.edli;
@@ -376,6 +380,10 @@ function renderStub(){
   document.getElementById('s-vpf').textContent = fmt(vpf);
   document.getElementById('s-vpf-row').hidden = vpf === 0;
   document.getElementById('s-ac1er').textContent = fmt(ac1er);
+  ['s-er116', 's-eps116'].forEach(id=>{
+    document.getElementById(id).textContent = fmt(hp116);
+    document.getElementById(`${id}-row`).hidden = hp116 === 0;
+  });
   document.getElementById('s-ac1t').textContent = fmt(ac1t);
   document.getElementById('s-ac10').textContent = fmt(ac10);
   document.getElementById('s-ac2').textContent = fmt(ac2);

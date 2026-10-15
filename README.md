@@ -136,6 +136,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.7.1 | 15-10-2026 16:01 | Challan summary shows the higher pension 1.16% in small type under Er share and EPS total |
 | 1.7.0 | 15-10-2026 15:46 | Higher pension per EPS member and for all EPS members: EPS on the actual wage (8.33% + 1.16% above the ceiling, from the employer's 12%); sets Higher EPF to Yes (both) |
 | 1.6.2 | 15-10-2026 15:28 | Challan summary is as tall as the wage register on desktop, with the grand total and Generate buttons at the bottom |
 | 1.6.1 | 15-10-2026 15:18 | "Clear all" button empties the wage and exit registers after a confirmation |
