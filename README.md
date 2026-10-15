@@ -78,12 +78,17 @@ minutes. Visitors stay registered on their device for a year.
   ₹25,000 from October 2026. September 2026 is a split month (1–16 Sep at
   ₹15,000, 17–30 Sep at ₹25,000, pro rata by days, single ECR) per the EPFO
   FAQ. Each row has a "Higher EPF" choice:
-  - **Yes (both)**, the default — employee and employer both contribute
-    12% on the actual wage above the ceiling.
+  - **Yes (both)** — employee and employer both contribute 12% on the
+    actual wage above the ceiling.
   - **Employee only** — the employee contributes 12% on the actual wage;
     the employer's 12% is restricted to the ceiling wage (EPS ₹1,250 +
     diff ₹550 at ₹15,000; EPS ₹2,083 + diff ₹917 at ₹25,000).
-  - **No** — EPF wages capped at the ceiling for both.
+  - **No**, the default — EPF wages capped at the ceiling for both, so
+    EPF, EPS and EDLI wages match.
+
+  The "Higher EPF for all members" switch above the wage table sets every
+  row at once; new and uploaded rows follow the last choice, and each
+  row's dropdown can still be changed (the switch shows "mixed" then).
 
   EPS and EDLI wages are always capped, so the EPS contribution is
   restricted to 8.33% of the ceiling and the rest of the employer's share
@@ -119,6 +124,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.6.0 | 15-10-2026 15:04 | Higher EPF defaults to No (EPF, EPS and EDLI wages match); "Higher EPF for all members" switch sets every row at once |
 | 1.5.2 | 13-10-2026 08:17 | Release times corrected to the actual commit times |
 | 1.5.1 | 13-10-2026 08:13 | Duplicate UANs in the wage register are flagged and block ECR generation |
 | 1.5.0 | 13-10-2026 08:05 | On desktop only the wage rows scroll; header, establishment code / wage month and challan summary stay in place |

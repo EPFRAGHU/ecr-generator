@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.5.2"
-APP_BUILD = "13-10-2026 08:17 IST"
+APP_VERSION = "1.6.0"
+APP_BUILD = "15-10-2026 15:04 IST"
 
 
 @app.context_processor
@@ -372,7 +372,7 @@ HIGHER_MODES = {
 
 
 def calc_row(
-    epf, wage_month="", eps_member=True, sep_basis="cap", higher="Y", vpf=0
+    epf, wage_month="", eps_member=True, sep_basis="cap", higher="N", vpf=0
 ) -> dict:
     """
     `epf` is the member's full-month EPF wages. `higher` is a HIGHER_MODES
@@ -385,7 +385,7 @@ def calc_row(
          the employer's 12% is restricted to the ceiling wage (EPS 8.33% of
          it, the rest as the diff), e.g. 1,250 + 550 at 15,000 and
          2,083 + 917 at 25,000.
-      N  EPF wages capped at the ceiling for both.
+      N  EPF wages capped at the ceiling for both (the default).
 
     The ceiling is 15,000 up to 16.09.2026 and 25,000 from 17.09.2026; in
     September 2026 the wage is split per `sep_basis`.
@@ -398,7 +398,7 @@ def calc_row(
         higher = "Y"
     elif higher is False:
         higher = "N"
-    mode = higher if higher in HIGHER_MODES else "Y"
+    mode = higher if higher in HIGHER_MODES else "N"
 
     w = float(epf or 0)
     full_w = w
@@ -489,8 +489,8 @@ def row_eps_member(row: dict) -> bool:
 
 
 def row_higher_epf(row: dict) -> str:
-    mode = str(row.get("higher", "Y")).strip().upper()
-    return mode if mode in HIGHER_MODES else "Y"
+    mode = str(row.get("higher", "N")).strip().upper()
+    return mode if mode in HIGHER_MODES else "N"
 
 
 def row_sep_basis(row: dict) -> str:

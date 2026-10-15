@@ -298,6 +298,43 @@
     font-weight: 600;
     margin: 0;
   }
+  .bulk-higher{
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    order: 3;
+    flex-basis: 100%;
+  }
+  /* Room for the switch beside the title and count, else it wraps below */
+  .register-head:has(.bulk-higher){ flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  .register-head:has(.bulk-higher) h2,
+  .register-head:has(.bulk-higher) .count{ white-space: nowrap; }
+  @media (min-width: 1100px){
+    .bulk-higher{ order: 0; flex-basis: auto; margin-left: auto; }
+  }
+  .seg{
+    display: inline-flex;
+    border: 1px solid var(--ink);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .seg-btn{
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .seg-btn + .seg-btn{ border-left: 1px solid var(--ink); }
+  .seg-btn:hover{ background: var(--paper-deep); }
+  .seg-btn.active{ background: var(--ink); color: var(--white-ish); }
+  .bulk-note{ font-style: italic; color: var(--pencil); }
   .register-head .count{
     font-size: 12px;
     color: var(--ink-soft);

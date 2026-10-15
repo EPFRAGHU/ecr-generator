@@ -39,7 +39,7 @@ function calc(row){
   //       to the diff.
   //   E = employee only: employee 12% on the actual wage, employer 12%
   //       restricted to the ceiling wage (EPS 8.33% of it, rest as diff).
-  //   N = EPF wages capped at the ceiling for both.
+  //   N = EPF wages capped at the ceiling for both (the default).
   const mode = higherMode(row);
   let cappedW, epsW, edliW;
   if(month === SPLIT_MONTH){
@@ -85,9 +85,24 @@ const HIGHER_MODES = {
   N: 'No',
 };
 const higherMode = row => {
-  const m = String(row.higher ?? 'Y').trim().toUpperCase();
-  return m in HIGHER_MODES ? m : 'Y';
+  const m = String(row.higher ?? 'N').trim().toUpperCase();
+  return m in HIGHER_MODES ? m : 'N';
 };
+
+// "Higher EPF for all members" switch: sets every row at once, and new or
+// uploaded rows follow the last choice.
+let defaultHigher = 'N';
+
+function renderBulkHigher(){
+  const modes = new Set(wageRows.map(higherMode));
+  const state = modes.size === 1 ? [...modes][0] : (modes.size ? 'mixed' : defaultHigher);
+  document.querySelectorAll('[data-higher-all]').forEach(btn=>{
+    const on = btn.dataset.higherAll === state;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', on);
+  });
+  document.getElementById('bulk-higher-note').textContent = state === 'mixed' ? 'mixed' : '';
+}
 
 function isValidUAN(uan){ return /^\d{12}$/.test(String(uan||'').trim()); }
 
@@ -173,6 +188,7 @@ function renderWageTable(){
     tbody.appendChild(tr);
   });
   document.getElementById('wage-count').textContent = `${wageRows.length} entries`;
+  renderBulkHigher();
 
   tbody.querySelectorAll('.editable').forEach(cell=>{
     cell.addEventListener('blur', onWageEdit);
@@ -426,9 +442,17 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 });
 
 document.getElementById('add-row-btn').addEventListener('click', ()=>{
-  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, vpf:0, refund:0, higher:'Y', eps:'Y', sep:'cap'});
+  wageRows.push({uan:"", name:"New employee", gross:0, epf:0, ncp:0, vpf:0, refund:0, higher:defaultHigher, eps:'Y', sep:'cap'});
   renderWageTable();
   renderStub();
+});
+document.querySelectorAll('[data-higher-all]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    defaultHigher = btn.dataset.higherAll;
+    wageRows.forEach(r => { r.higher = defaultHigher; });
+    renderWageTable();
+    renderStub();
+  });
 });
 document.getElementById('add-exit-btn').addEventListener('click', ()=>{
   const today = new Date().toISOString().slice(0,10);
@@ -568,7 +592,7 @@ function importRows(rows, issues){
     ncp: isNaN(Number(r.ncp)) ? r.ncp : Number(r.ncp),
     vpf: isNaN(Number(r.vpf)) ? r.vpf : Number(r.vpf),
     refund: Number(r.refund)||0,
-    higher: 'Y', eps: 'Y', sep: 'cap',
+    higher: defaultHigher, eps: 'Y', sep: 'cap',
   }));
   wageRows.push(...added);
   // Checked after all rows are in, so duplicates within the file and
