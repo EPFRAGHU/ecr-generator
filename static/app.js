@@ -502,6 +502,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const tab = btn.dataset.tab;
     document.getElementById('panel-wage').classList.toggle('active', tab==='wage');
     document.getElementById('panel-exit').classList.toggle('active', tab==='exit');
+    document.getElementById('panel-arrear').classList.toggle('active', tab==='arrear');
+    document.body.classList.toggle('arrear-mode', tab==='arrear');
   });
 });
 
@@ -642,10 +644,10 @@ function setupMonthPicker(input){
   document.addEventListener('keydown', e=>{ if(e.key === 'Escape') close(); });
 }
 
-{
-  const monthInput = document.getElementById('wage-month');
+['wage-month', 'arrear-from', 'arrear-till'].forEach(id=>{
+  const monthInput = document.getElementById(id);
   if(monthInput.type !== 'month') setupMonthPicker(monthInput);
-}
+});
 
 // ---------- file upload ----------
 const uploadInput = document.getElementById('upload-input');
@@ -893,15 +895,253 @@ document.getElementById('gen-exit-btn').addEventListener('click', ()=>{
   downloadGenerated('/api/exit/generate', {estab_code, wage_month, rows: exitRows}, 'exit.txt');
 });
 
+// ---------- arrear register ----------
+// File for the portal's "Arrear File Upload": UAN, name, arrear EPF / EPS /
+// EDLI wages, EPF (employee), EPS and ER contributions due. Each member's
+// arrear is worked out month by month from the wage already paid and the
+// revised wage; EPS and EDLI (and EPF when Higher EPF is "No") only count up
+// to each month's ceiling. Keep calcArrear() in sync with calc_arrear() in
+// app.py.
+let arrearRows = [];
+const ARREAR_RATES = {'12': 0.12, '10': 0.10};
+const ARREAR_OVR_FIELDS = ['epf', 'eps', 'edli'];
+
+function arrearMonths(){
+  const from = document.getElementById('arrear-from').value;
+  const till = document.getElementById('arrear-till').value;
+  const re = /^(\d{4})-(\d{2})$/;
+  const a = re.exec(from || ''), b = re.exec(till || '');
+  if(!a || !b) return [];
+  let y = Number(a[1]), m = Number(a[2]);
+  const ty = Number(b[1]), tm = Number(b[2]);
+  const out = [];
+  while((y < ty || (y === ty && m <= tm)) && out.length <= 120){
+    out.push(`${y}-${String(m).padStart(2,'0')}`);
+    if(m === 12){ y++; m = 1; } else m++;
+  }
+  return out;
+}
+
+function cappedMonthWage(w, month){
+  if(month === SPLIT_MONTH){
+    return Math.min(w, OLD_CEILING)*SPLIT_BEFORE + Math.min(w, NEW_CEILING)*SPLIT_AFTER;
+  }
+  return Math.min(w, ceilingFor(month));
+}
+
+const overrideValue = v => {
+  const s = String(v ?? '').trim();
+  return /^\d+(\.\d+)?$/.test(s) ? Math.trunc(Number(s)) : null;
+};
+
+function calcArrear(row, months, rate){
+  const paid = Number(row.paid)||0, revised = Number(row.revised)||0;
+  const mode = higherMode(row);
+  const full = (revised - paid) * months.length;
+  const capped = months.reduce((s, m)=> s + cappedMonthWage(revised, m) - cappedMonthWage(paid, m), 0);
+  const w = {
+    epf: roundHalfUp(mode === 'N' ? capped : full),
+    eps: row.eps === 'N' ? 0 : roundHalfUp(capped),
+    edli: roundHalfUp(capped),
+  };
+  ARREAR_OVR_FIELDS.forEach(k=>{
+    const v = overrideValue((row.ovr || {})[k]);
+    if(v !== null) w[k] = v;
+  });
+  const employerW = mode === 'E' ? Math.min(w.epf, roundHalfUp(capped)) : w.epf;
+  const r = ARREAR_RATES[rate] ?? 0.12;
+  const ee = roundHalfUp(w.epf * r);
+  const eps = roundHalfUp(w.eps * 0.0833);
+  return {epfW: w.epf, epsW: w.eps, edliW: w.edli, ee, eps, er: roundHalfUp(employerW * r) - eps};
+}
+
+// Keep in sync with arrear_row_issue() in app.py.
+function arrearRowIssue(row){
+  const paid = Number(row.paid), revised = Number(row.revised);
+  if(!isValidUAN(row.uan)) return 'not 12 digits';
+  if(isNaN(paid) || isNaN(revised)) return 'wages must be numbers';
+  if(paid < 0 || revised < 0) return 'wages cannot be negative';
+  if(revised < paid) return 'revised wage is less than the wage paid';
+  for(const k of ARREAR_OVR_FIELDS){
+    const v = (row.ovr || {})[k];
+    if(v !== undefined && v !== '' && overrideValue(v) === null) return `arrear ${k.toUpperCase()} wages must be a whole number`;
+  }
+  const uan = String(row.uan).trim();
+  const dupes = arrearRows.filter(r => r !== row && String(r.uan).trim() === uan).length;
+  return dupes ? 'duplicate UAN' : '';
+}
+
+function renderArrearTable(){
+  const tbody = document.getElementById('arrear-tbody');
+  const months = arrearMonths();
+  const rate = document.getElementById('arrear-rate').value;
+  const tot = {epfW:0, epsW:0, edliW:0, ee:0, eps:0, er:0};
+  tbody.innerHTML = '';
+  arrearRows.forEach((row, i)=>{
+    const c = calcArrear(row, months, rate);
+    Object.keys(tot).forEach(k => tot[k] += c[k]);
+    const issue = arrearRowIssue(row);
+    const ovr = row.ovr || {};
+    const yn = (val, opts) => opts.map(([v,l])=>`<option value="${v}" ${val===v?'selected':''}>${l}</option>`).join('');
+    const ovrCell = (k, val) => `<td class="editable input-box${overrideValue(ovr[k]) !== null ? ' override' : ''}" contenteditable="true" inputmode="numeric" data-afield="ovr-${k}" data-i="${i}">${fmt(val)}</td>`;
+    const tr = document.createElement('tr');
+    if(issue) tr.classList.add('issue-row');
+    tr.innerHTML = `
+      <td class="rownum">${i+1}</td>
+      <td class="left editable" contenteditable="true" data-afield="uan" data-i="${i}">${escapeHtml(row.uan)}${issue ? `<span class="issue-note">${issue}</span>` : ''}</td>
+      <td class="left editable" contenteditable="true" data-afield="name" data-i="${i}">${escapeHtml(row.name)}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="decimal" data-afield="paid" data-i="${i}">${escapeHtml(row.paid)}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="decimal" data-afield="revised" data-i="${i}">${escapeHtml(row.revised)}</td>
+      <td><select class="cell-select" data-asel="eps" data-i="${i}">${yn(row.eps || 'Y', [['Y','Yes'],['N','No']])}</select></td>
+      <td><select class="cell-select" data-asel="higher" data-i="${i}">${yn(higherMode(row), Object.entries(HIGHER_MODES))}</select></td>
+      ${ovrCell('epf', c.epfW)}
+      ${ovrCell('eps', c.epsW)}
+      ${ovrCell('edli', c.edliW)}
+      <td class="calc">${fmt(c.ee)}</td>
+      <td class="calc">${fmt(c.eps)}</td>
+      <td class="calc">${fmt(c.er)}</td>
+      <td class="delete-cell"><button class="del-btn" data-adel="${i}">×</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('arrear-tfoot').innerHTML = arrearRows.length ? `
+    <tr><td></td><td class="left" colspan="6">Total (${arrearRows.length} member${arrearRows.length === 1 ? '' : 's'})</td>
+    <td>${fmt(tot.epfW)}</td><td>${fmt(tot.epsW)}</td><td>${fmt(tot.edliW)}</td>
+    <td>${fmt(tot.ee)}</td><td>${fmt(tot.eps)}</td><td>${fmt(tot.er)}</td><td></td></tr>` : '';
+  document.getElementById('arrear-count').textContent = `${arrearRows.length} entries`;
+  document.getElementById('arrear-months').textContent = months.length
+    ? `${months.length} month${months.length === 1 ? '' : 's'}` : 'choose From and Till';
+  const code = (document.getElementById('estab-code').value.trim() || 'ESTABCODE').replace(/[^A-Za-z0-9]/g, '').slice(0, 15);
+  const [f, t] = [document.getElementById('arrear-from').value, document.getElementById('arrear-till').value];
+  document.getElementById('fname-arrear').textContent =
+    f && t ? `${code}ARR${f.replace('-','')}${t.replace('-','')}.txt` : '';
+
+  tbody.querySelectorAll('[data-afield]').forEach(cell=>{
+    cell.addEventListener('focus', ()=>{
+      // Amount cells open blank for typing, as in the wage register.
+      if(['paid','revised'].includes(cell.dataset.afield) || cell.dataset.afield.startsWith('ovr-')) cell.textContent = '';
+    });
+    cell.addEventListener('blur', onArrearEdit);
+  });
+  tbody.querySelectorAll('[data-asel]').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      arrearRows[Number(sel.dataset.i)][sel.dataset.asel] = sel.value;
+      renderArrearTable();
+    });
+  });
+  tbody.querySelectorAll('[data-adel]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      arrearRows.splice(Number(btn.dataset.adel), 1);
+      renderArrearTable();
+    });
+  });
+}
+
+function onArrearEdit(e){
+  const row = arrearRows[Number(e.target.dataset.i)];
+  const field = e.target.dataset.afield;
+  const note = e.target.querySelector('.issue-note');
+  const val = e.target.textContent.replace(note ? note.textContent : '', '').trim().replace(/,/g, '');
+  if(field.startsWith('ovr-')){
+    const k = field.slice(4);
+    row.ovr = row.ovr || {};
+    // A cleared cell goes back to the calculated figure; a typed figure
+    // overrides it only if it differs from the calculation.
+    delete row.ovr[k];
+    if(val !== ''){
+      const calcVal = calcArrear(row, arrearMonths(), document.getElementById('arrear-rate').value)[`${k}W`];
+      if(overrideValue(val) !== calcVal) row.ovr[k] = val;
+    }
+  }else if(['paid','revised'].includes(field)){
+    if(val !== '') row[field] = isNaN(Number(val)) ? val : Number(val);
+  }else{
+    row[field] = val;
+  }
+  // Re-rendering replaces every cell; put focus back on the cell that
+  // Tab / click was moving to.
+  const next = e.relatedTarget;
+  const sel = next && next.dataset && next.dataset.i !== undefined
+    ? (next.dataset.afield ? `[data-afield="${next.dataset.afield}"][data-i="${next.dataset.i}"]`
+      : next.dataset.asel ? `[data-asel="${next.dataset.asel}"][data-i="${next.dataset.i}"]` : null)
+    : null;
+  renderArrearTable();
+  const target = sel && document.querySelector(`#arrear-tbody ${sel}`);
+  if(target) target.focus();
+}
+
+['arrear-from', 'arrear-till', 'arrear-rate'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderArrearTable);
+  document.getElementById(id).addEventListener('change', renderArrearTable);
+});
+document.getElementById('estab-code').addEventListener('input', renderArrearTable);
+document.getElementById('add-arrear-btn').addEventListener('click', ()=>{
+  arrearRows.push({uan:'', name:'New member', paid:0, revised:0, eps:'Y', higher:'N', ovr:{}});
+  renderArrearTable();
+});
+document.getElementById('arrear-clear-btn').addEventListener('click', ()=>{
+  if(!arrearRows.length){ showToast('Nothing to clear'); return; }
+  if(!confirm(`Clear all ${arrearRows.length} arrear row${arrearRows.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+  arrearRows = [];
+  renderArrearTable();
+});
+
+const arrearUploadInput = document.getElementById('arrear-upload-input');
+document.getElementById('arrear-upload-btn').addEventListener('click', ()=> arrearUploadInput.click());
+arrearUploadInput.addEventListener('change', async ()=>{
+  const file = arrearUploadInput.files[0];
+  arrearUploadInput.value = '';
+  if(!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  let resp;
+  try{
+    resp = await fetch('/api/arrear/upload', {method:'POST', body: formData});
+  }catch(err){
+    showToast('Upload failed — could not reach the server');
+    return;
+  }
+  if(handleNeedsRegistration(resp)) return;
+  const data = await resp.json().catch(()=>({error:'Upload failed'}));
+  if(!resp.ok){ showToast(data.error || 'Upload failed', 6000); return; }
+  arrearRows.push(...data.rows.map(r=>({
+    uan: r.uan, name: r.name,
+    paid: isNaN(Number(r.paid)) ? r.paid : Number(r.paid),
+    revised: isNaN(Number(r.revised)) ? r.revised : Number(r.revised),
+    eps: r.eps, higher: r.higher, ovr: r.ovr || {},
+  })));
+  renderArrearTable();
+  const bad = arrearRows.filter(arrearRowIssue).length;
+  showToast(`Imported ${data.rows.length} row${data.rows.length === 1 ? '' : 's'}` + (bad ? ` — ${bad} need a look (highlighted in red)` : ''), 4000);
+});
+
+document.getElementById('gen-arrear-btn').addEventListener('click', ()=>{
+  const estab_code = document.getElementById('estab-code').value.trim();
+  const from_month = document.getElementById('arrear-from').value;
+  const till_month = document.getElementById('arrear-till').value;
+  if(!estab_code){ showToast('Enter the establishment code first'); return; }
+  if(!arrearMonths().length){ showToast('Choose the arrear From and Till months (From must not be after Till)'); return; }
+  if(!arrearRows.length){ showToast('Add at least one member to the arrear register'); return; }
+  if(arrearRows.some(arrearRowIssue)){ showToast('Fix the rows highlighted in red before generating'); return; }
+  downloadGenerated('/api/arrear/generate', {
+    estab_code, from_month, till_month,
+    rate: document.getElementById('arrear-rate').value,
+    rows: arrearRows,
+  }, 'arrear.txt');
+});
+
 // ---------- init ----------
 // Default wage month: the month before the current one (ECRs are filed for
 // the previous month's wages).
 {
   const d = new Date();
   const prev = new Date(d.getFullYear(), d.getMonth() - 1, 1);
-  document.getElementById('wage-month').value =
-    `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`;
+  const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('wage-month').value = prevMonth;
+  // Arrear period defaults to that month too; change both as needed.
+  document.getElementById('arrear-from').value = prevMonth;
+  document.getElementById('arrear-till').value = prevMonth;
 }
 renderWageTable();
 renderExitTable();
 renderStub();
+renderArrearTable();

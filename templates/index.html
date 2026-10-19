@@ -83,6 +83,7 @@
   <div class="tabs">
     <button class="tab-btn active" data-tab="wage">Wage Register</button>
     <button class="tab-btn" data-tab="exit">Exit Register</button>
+    <button class="tab-btn" data-tab="arrear">Arrear Register</button>
   </div>
 </div>
 
@@ -188,6 +189,64 @@
           <div class="legend">
             <span><span class="swatch ink"></span> you enter</span>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARREAR PANEL: file for the portal's "Arrear File Upload" -->
+    <div class="arrear-panel" id="panel-arrear">
+      <div class="register">
+        <div class="register-head">
+          <h2>Arrears</h2>
+          <div class="arrear-controls">
+            <label>From month <input id="arrear-from" type="month" /></label>
+            <label>Till month <input id="arrear-till" type="month" /></label>
+            <label>Contribution rate
+              <select id="arrear-rate">
+                <option value="12">12%</option>
+                <option value="10">10%</option>
+              </select>
+            </label>
+            <span class="arrear-months" id="arrear-months"></span>
+          </div>
+          <span class="count" id="arrear-count">0 entries</span>
+        </div>
+        <p class="arrear-help">Enter each member's monthly EPF wage already paid and the revised monthly EPF wage. Arrear wages are worked out month by month; EPS and EDLI arrears count only up to each month's ceiling. Type in an arrear wage cell to override it; clear the cell to go back to the calculated figure. Use the same From month, Till month and rate on the portal's Arrear File Upload form.</p>
+        <div class="ledger-scroll">
+        <table class="ledger" id="arrear-table">
+          <thead>
+            <tr>
+              <th class="left">#</th>
+              <th class="left">UAN</th>
+              <th class="left">Member name</th>
+              <th title="Monthly EPF wage (Basic + DA) on which PF was already paid">EPF wage paid / month</th>
+              <th title="Monthly EPF wage after the revision">Revised EPF wage / month</th>
+              <th>EPS member</th>
+              <th>Higher EPF</th>
+              <th>Arrear EPF wages</th>
+              <th>Arrear EPS wages</th>
+              <th>Arrear EDLI wages</th>
+              <th>EPF contri. due</th>
+              <th>EPS contri. due</th>
+              <th>ER contri. due</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="arrear-tbody"></tbody>
+          <tfoot id="arrear-tfoot"></tfoot>
+        </table>
+        </div>
+        <div class="register-foot">
+          <div class="foot-buttons">
+            <button class="btn" id="add-arrear-btn" type="button">+ Add member</button>
+            <button class="btn ghost" id="arrear-upload-btn" type="button">Upload Excel / CSV</button>
+            <input type="file" id="arrear-upload-input" accept=".xlsx,.xlsm,.xls,.csv" style="display:none;" />
+            <a class="btn ghost" href="/api/arrear/template/ECR_arrear_upload_template.xlsx" download="ECR_arrear_upload_template.xlsx">Download sample Excel</a>
+            <button class="btn danger" id="arrear-clear-btn" type="button">Clear</button>
+          </div>
+          <button class="btn-generate arrear-generate" id="gen-arrear-btn" type="button">Generate arrear text file
+            <span class="fname" id="fname-arrear"></span>
+          </button>
         </div>
       </div>
     </div>

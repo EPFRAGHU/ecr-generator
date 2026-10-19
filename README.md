@@ -65,6 +65,17 @@ minutes. Visitors stay registered on their device for a year.
 
 ## What it does
 
+- **Arrear Register tab** — makes the text file for the portal's "Arrear
+  File Upload" (8 `#~#` fields: UAN, name, arrear EPF / EPS / EDLI wages,
+  EPF, EPS and ER contributions due). Per member: monthly EPF wage already
+  paid, revised monthly EPF wage, EPS member, Higher EPF. The From / Till
+  months and the 12% or 10% rate apply to the whole file, as on the portal
+  form. Arrears are worked out month by month; EPS and EDLI arrears (and
+  EPF when Higher EPF is "No") count only up to each month's ceiling
+  (₹15,000 to Aug 2026, Sep 2026 split, ₹25,000 from Oct 2026). Arrear wage
+  cells can be overridden by hand. Excel/CSV upload with a sample sheet
+  (`/api/arrear/template`); file name `<estab>ARR<from><till>.txt` (letters
+  and digits only, 30 characters, within the portal's 32 limit).
 - **Import ECR file** — loads an ECR text file (`#~#` format, 11 fields) back
   into the wage register. Each line is worked back to the full-month EPF
   wage and the member's options (EPS member, higher EPF, higher pension,
@@ -145,6 +156,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.9.0 | 19-10-2026 10:49 | Arrear Register tab: makes the portal's Arrear File Upload text file (8 fields), month-by-month arrears within each month's ceiling, 12%/10% rate, hand overrides, Excel/CSV upload and a sample Excel |
 | 1.8.0 | 15-10-2026 23:30 | "Import ECR file (.txt)" loads an ECR text file back into the wage register, working out each member's full-month wage and options; establishment code and wage month read from the file name |
 | 1.7.1 | 15-10-2026 16:01 | Challan summary shows the higher pension 1.16% in small type under Er share and EPS total |
 | 1.7.0 | 15-10-2026 15:46 | Higher pension per EPS member and for all EPS members: EPS on the actual wage (8.33% + 1.16% above the ceiling, from the employer's 12%); sets Higher EPF to Yes (both) |

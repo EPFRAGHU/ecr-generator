@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.8.0"
-APP_BUILD = "15-10-2026 23:30 IST"
+APP_VERSION = "1.9.0"
+APP_BUILD = "19-10-2026 10:49 IST"
 
 
 @app.context_processor
@@ -96,7 +96,8 @@ MAX_REGISTRATIONS_PER_HOUR = 10
 _registrations_by_ip: dict[str, list[float]] = {}
 
 ADMIN_ENDPOINTS = {"admin", "admin_export", "admin_delete"}
-REGISTERED_ENDPOINTS = {"upload", "import_ecr", "generate_ecr", "generate_exit"}
+REGISTERED_ENDPOINTS = {"upload", "import_ecr", "generate_ecr", "generate_exit",
+                        "generate_arrear", "upload_arrear"}
 
 
 def _recent(log: dict[str, list[float]], ip: str, window: float) -> list[float]:
@@ -1000,6 +1001,322 @@ def generate_exit():
         mimetype="text/plain",
         as_attachment=True,
         download_name=filename,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Arrear file (EPFO Unified Portal: ECR / Returns > Arrear File Upload)
+#
+# 8 #~#-separated fields per member: UAN, member name, arrear EPF wages,
+# arrear EPS wages, arrear EDLI wages, EPF (employee) contribution due,
+# EPS contribution due, ER (employer EPF diff) contribution due.
+# The arrear period (from / till month), disbursement date, contribution rate
+# and remarks are entered on the portal's upload form, so one file covers one
+# period at one rate.
+#
+# Each member's arrear is worked out month by month from the EPF wage already
+# paid and the revised EPF wage. EPS and EDLI arrears (and capped EPF, when
+# higher EPF is "No") only count up to that month's wage ceiling: 15,000 up
+# to August 2026, 25,000 from October 2026, and September 2026 split 16/30 at
+# 15,000 and 14/30 at 25,000, as in the wage register.
+# Keep calc_arrear() in sync with calcArrear() in static/app.js.
+# ---------------------------------------------------------------------------
+ARREAR_RATES = {"12": 0.12, "10": 0.10}
+MONTH_RE = re.compile(r"20\d{2}-(0[1-9]|1[0-2])")
+MAX_ARREAR_MONTHS = 120
+
+
+def months_between(from_month: str, till_month: str) -> list[str]:
+    """Months from `from_month` to `till_month` inclusive (YYYY-MM)."""
+    if not (MONTH_RE.fullmatch(from_month or "") and MONTH_RE.fullmatch(till_month or "")):
+        return []
+    y, m = (int(p) for p in from_month.split("-"))
+    ty, tm = (int(p) for p in till_month.split("-"))
+    out = []
+    while (y, m) <= (ty, tm) and len(out) <= MAX_ARREAR_MONTHS:
+        out.append(f"{y}-{m:02d}")
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return out
+
+
+def capped_month_wage(w: float, month: str) -> float:
+    """The part of a monthly wage that falls within that month's ceiling."""
+    if month == SPLIT_MONTH:
+        f1 = SPLIT_DAYS_BEFORE / SPLIT_DAYS_TOTAL
+        f2 = SPLIT_DAYS_AFTER / SPLIT_DAYS_TOTAL
+        return min(w, OLD_CEILING) * f1 + min(w, NEW_CEILING) * f2
+    return min(w, ceiling_for(month))
+
+
+def _override(value):
+    s = str(value if value is not None else "").strip()
+    return int(float(s)) if re.fullmatch(r"\d+(\.\d+)?", s) else None
+
+
+def calc_arrear(paid, revised, months, eps_member=True, higher="N", rate="12",
+                override: dict | None = None) -> dict:
+    """
+    `paid` and `revised` are the member's monthly EPF wage before and after
+    the revision; `months` the arrear period. `higher` is a HIGHER_MODES
+    value: Y = employee and employer on the full arrear, E = employee on the
+    full arrear and employer only up to the ceiling, N = both up to the
+    ceiling. `override` may set "epf", "eps" or "edli" arrear wages by hand.
+    """
+    paid, revised = float(paid or 0), float(revised or 0)
+    mode = higher if higher in HIGHER_MODES else "N"
+    full = (revised - paid) * len(months)
+    capped = sum(capped_month_wage(revised, m) - capped_month_wage(paid, m) for m in months)
+    wages = {
+        "epf": round_half_up(capped if mode == "N" else full),
+        "eps": round_half_up(capped) if eps_member else 0,
+        "edli": round_half_up(capped),
+    }
+    for key, value in (override or {}).items():
+        value = _override(value)
+        if key in wages and value is not None:
+            wages[key] = value
+    # Employer's share follows the EPF arrear, except "employee only" where
+    # it stays within the ceiling.
+    employer_w = min(wages["epf"], round_half_up(capped)) if mode == "E" else wages["epf"]
+    r = ARREAR_RATES.get(str(rate), 0.12)
+    ee = round_half_up(wages["epf"] * r)
+    eps_c = round_half_up(wages["eps"] * 0.0833)
+    return {
+        "epf_wages": wages["epf"],
+        "eps_wages": wages["eps"],
+        "edli_wages": wages["edli"],
+        "ee": ee,
+        "eps": eps_c,
+        "er": round_half_up(employer_w * r) - eps_c,
+    }
+
+
+def arrear_row_issue(row: dict) -> str:
+    try:
+        paid = float(row.get("paid") or 0)
+        revised = float(row.get("revised") or 0)
+    except (TypeError, ValueError):
+        return "wages must be numbers"
+    if paid < 0 or revised < 0:
+        return "wages cannot be negative"
+    if revised < paid:
+        return "revised wage is less than the wage paid"
+    for key in ("epf", "eps", "edli"):
+        value = (row.get("ovr") or {}).get(key)
+        if value not in (None, "") and _override(value) is None:
+            return f"arrear {key.upper()} wages must be a whole number"
+    return ""
+
+
+def _arrear_filename(estab_code: str, from_month: str, till_month: str) -> str:
+    # Portal rule: letters and digits only, at most 32 characters.
+    code = re.sub(r"[^A-Za-z0-9]", "", estab_code)[:15]
+    return f"{code}ARR{from_month.replace('-', '')}{till_month.replace('-', '')}.txt"
+
+
+@app.route("/api/arrear/generate", methods=["POST"])
+def generate_arrear():
+    data = request.get_json(force=True)
+    estab_code = (data.get("estab_code") or "").strip()
+    from_month, till_month = data.get("from_month", ""), data.get("till_month", "")
+    rate = str(data.get("rate", "12"))
+    rows = data.get("rows") or []
+
+    if not estab_code:
+        return jsonify({"error": "Establishment code is required"}), 400
+    months = months_between(from_month, till_month)
+    if not months:
+        return jsonify({"error": "Choose the arrear From and Till months (From must not be after Till)"}), 400
+    if len(months) > MAX_ARREAR_MONTHS:
+        return jsonify({"error": f"The arrear period is longer than {MAX_ARREAR_MONTHS} months"}), 400
+    if rate not in ARREAR_RATES:
+        return jsonify({"error": "Contribution rate must be 12% or 10%"}), 400
+    if not rows:
+        return jsonify({"error": "Add at least one member to the arrear register"}), 400
+    for n, row in enumerate(rows, start=1):
+        if not re.fullmatch(r"\d{12}", str(row.get("uan", "")).strip()):
+            return jsonify({"error": f"Row {n}: UAN is not a 12-digit number"}), 400
+        issue = arrear_row_issue(row)
+        if issue:
+            return jsonify({"error": f"Row {n}: {issue}"}), 400
+    dup = duplicate_uan_issue(rows)
+    if dup:
+        return jsonify({"error": dup}), 400
+
+    lines = []
+    for row in rows:
+        c = calc_arrear(row.get("paid"), row.get("revised"), months, row_eps_member(row),
+                        row_higher_epf(row), rate, row.get("ovr"))
+        lines.append("#~#".join([
+            str(row.get("uan", "")).strip()[:12],
+            str(row.get("name", "")).strip().upper(),
+            str(c["epf_wages"]), str(c["eps_wages"]), str(c["edli_wages"]),
+            str(c["ee"]), str(c["eps"]), str(c["er"]),
+        ]))
+
+    content = "\r\n".join(lines) + "\r\n"
+    _log("arrear")
+    return send_file(
+        io.BytesIO(content.encode("utf-8")),
+        mimetype="text/plain",
+        as_attachment=True,
+        download_name=_arrear_filename(estab_code, from_month, till_month),
+    )
+
+
+ARREAR_FIELD_SYNONYMS = {
+    "uan": ["uan", "universal account number", "member uan"],
+    "name": ["member name", "employee name", "name"],
+    "paid": ["epf wage paid", "epf wages paid", "wage paid", "old epf wage", "existing epf wage"],
+    "revised": ["revised epf wage", "revised epf wages", "revised wage", "new epf wage"],
+    "eps": ["eps member"],
+    "higher": ["higher epf"],
+    "arr_epf": ["arrear epf wages", "arrear epf wage"],
+    "arr_eps": ["arrear eps wages", "arrear eps wage"],
+    "arr_edli": ["arrear edli wages", "arrear edli wage"],
+}
+ARREAR_REQUIRED = ["uan", "name", "paid", "revised"]
+
+ARREAR_TEMPLATE_FILENAME = "ECR_arrear_upload_template.xlsx"
+ARREAR_TEMPLATE_COLUMNS = [
+    ("UAN", 16),
+    ("Member name", 28),
+    ("EPF wage paid (per month)", 24),
+    ("Revised EPF wage (per month)", 26),
+    ("EPS member (Y/N)", 16),
+    ("Higher EPF (Y/E/N)", 17),
+    ("Arrear EPF wages (optional)", 25),
+    ("Arrear EPS wages (optional)", 25),
+    ("Arrear EDLI wages (optional)", 26),
+]
+ARREAR_TEMPLATE_SAMPLES = [
+    ["100000000001", "SAMPLE MEMBER ONE", 12000, 14000, "Y", "N", None, None, None],
+    ["100000000002", "SAMPLE MEMBER TWO", 14000, 17000, "Y", "N", None, None, None],
+    ["100000000003", "SAMPLE MEMBER THREE", 20000, 22000, "N", "Y", None, None, None],
+]
+
+
+def _guess_columns(headers: list[str], synonyms: dict[str, list[str]]) -> dict[str, str | None]:
+    normalized = {h: _normalize_header(h) for h in headers}
+    mapping: dict[str, str | None] = {}
+    taken: set[str] = set()
+    for exact in (True, False):
+        for field, words in synonyms.items():
+            if mapping.get(field):
+                continue
+            for h, norm in normalized.items():
+                if h in taken:
+                    continue
+                if (norm in words) if exact else any(norm.startswith(w) for w in words):
+                    mapping[field] = h
+                    taken.add(h)
+                    break
+    return {f: mapping.get(f) for f in synonyms}
+
+
+@app.route("/api/arrear/upload", methods=["POST"])
+def upload_arrear():
+    import pandas as pd
+
+    file = request.files.get("file")
+    if file is None:
+        return jsonify({"error": "No file uploaded"}), 400
+    filename = (file.filename or "").lower()
+    try:
+        if filename.endswith((".xlsx", ".xlsm", ".xls")):
+            df = pd.read_excel(file, dtype=str)
+        else:
+            df = pd.read_csv(file, dtype=str)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": f"Could not read file: {exc}"}), 400
+    df = df.dropna(how="all")
+
+    mapping = _guess_columns([str(c) for c in df.columns], ARREAR_FIELD_SYNONYMS)
+    missing = [f for f in ARREAR_REQUIRED if not mapping.get(f)]
+    if missing:
+        names = {"uan": "UAN", "name": "Member name", "paid": "EPF wage paid (per month)",
+                 "revised": "Revised EPF wage (per month)"}
+        return jsonify({"error": "Columns not found: " + ", ".join(names[f] for f in missing)
+                        + ". Use the arrear sample Excel."}), 400
+
+    rows = []
+    for _, r in df.iterrows():
+        def get(field):
+            col = mapping.get(field)
+            val = r.get(col, "") if col else ""
+            return "" if pd.isna(val) else _whole_number_text(str(val).strip())
+
+        eps = get("eps").upper()[:1]
+        higher = get("higher").upper()[:1]
+        rows.append({
+            "uan": re.sub(r"\D", "", get("uan"))[:12],
+            "name": get("name"),
+            "paid": get("paid") or "0",
+            "revised": get("revised") or "0",
+            "eps": "N" if eps == "N" else "Y",
+            "higher": higher if higher in HIGHER_MODES else "N",
+            "ovr": {k: get(f"arr_{k}") for k in ("epf", "eps", "edli") if get(f"arr_{k}")},
+        })
+    _log("upload")
+    return jsonify({"status": "ok", "rows": rows})
+
+
+@app.route("/api/arrear/template")
+@app.route(f"/api/arrear/template/{ARREAR_TEMPLATE_FILENAME}")
+def arrear_template():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Arrears"
+    ws.append([name for name, _ in ARREAR_TEMPLATE_COLUMNS])
+    for idx, (_, width) in enumerate(ARREAR_TEMPLATE_COLUMNS, start=1):
+        cell = ws.cell(row=1, column=idx)
+        ws.column_dimensions[cell.column_letter].width = width
+        cell.font = Font(bold=True)
+    for sample in ARREAR_TEMPLATE_SAMPLES:
+        ws.append(sample)
+    # Store UANs as text so Excel doesn't turn 12 digits into 1.01E+11.
+    for row in range(2, 1001):
+        ws.cell(row=row, column=1).number_format = "@"
+    ws.freeze_panes = "A2"
+
+    notes = wb.create_sheet("Instructions")
+    for line in [
+        ["Arrear upload sheet — one row per member. Replace the three sample rows with your members."],
+        [],
+        ["UAN", "12-digit UAN (required)"],
+        ["Member name", "As in the UAN record (required)"],
+        ["EPF wage paid (per month)", "Monthly EPF wage (Basic + DA) on which PF was already paid for the arrear period (required)"],
+        ["Revised EPF wage (per month)", "Monthly EPF wage after the revision (required)"],
+        ["EPS member (Y/N)", "N if the member is not in the pension scheme (EPS arrear wages = 0). Blank = Y"],
+        ["Higher EPF (Y/E/N)", "Y = both shares on the full arrear; E = employee on the full arrear, employer up to the ceiling; N or blank = both up to the ceiling"],
+        ["Arrear EPF / EPS / EDLI wages", "Optional. Leave blank to let the generator calculate them; fill in only to override"],
+        [],
+        ["How it is calculated", "Choose the From and Till months (the arrear period) and the contribution rate on the Arrear Register tab."],
+        ["", "Arrear EPF wages = (revised wage - wage paid) x number of months; with Higher EPF = N, only the part within each month's ceiling."],
+        ["", "Arrear EPS and EDLI wages = only the part within each month's ceiling: Rs 15,000 up to Aug 2026, Rs 25,000 from Oct 2026, Sep 2026 split 16/30 and 14/30."],
+        ["", "Employee share = rate x arrear EPF wages; EPS = 8.33% of arrear EPS wages; employer EPF (diff) = rate x arrear EPF wages - EPS."],
+        [],
+        ["Samples (arrear period Apr 2026 to Jun 2026, 3 months, 12%)", ""],
+        ["SAMPLE MEMBER ONE", "12,000 -> 14,000: arrear EPF/EPS/EDLI wages 6,000; EE 720, EPS 500, ER 220"],
+        ["SAMPLE MEMBER TWO", "14,000 -> 17,000: only 1,000 a month is within the 15,000 ceiling, so arrear wages 3,000; EE 360, EPS 250, ER 110"],
+        ["SAMPLE MEMBER THREE", "20,000 -> 22,000, not in EPS, higher EPF on both: arrear EPF 6,000, EPS 0, EDLI 0; EE 720, EPS 0, ER 720"],
+    ]:
+        notes.append(line)
+    notes.column_dimensions["A"].width = 34
+    notes.column_dimensions["B"].width = 120
+    notes["A1"].font = Font(bold=True)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=ARREAR_TEMPLATE_FILENAME,
     )
 
 

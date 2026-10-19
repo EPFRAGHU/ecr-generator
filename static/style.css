@@ -586,6 +586,31 @@
   .exit-panel.active{ display:block; }
   .wage-panel.active{ display:block; }
   .wage-panel{ display:none; }
+  .arrear-panel{ display:none; }
+  .arrear-panel.active{ display:block; }
+
+  /* Arrear register: the challan summary belongs to the wage register, so
+     the arrear card takes the full width instead. */
+  body.arrear-mode .stub{ display: none; }
+  .arrear-controls{
+    display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+    font-size: 12px; color: var(--ink-soft);
+  }
+  .arrear-controls label{ display: flex; align-items: center; gap: 6px; }
+  .arrear-controls input, .arrear-controls select{
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    border: 1px solid var(--rule); background: var(--white-ish); color: var(--ink);
+    padding: 3px 6px;
+  }
+  .arrear-months{ font-weight: 600; color: var(--ink); }
+  .arrear-help{ font-size: 11.5px; color: var(--ink-soft); margin: 4px 0 10px; line-height: 1.45; }
+  td.override{ background: rgba(168,130,60,0.12); }
+  td.override::after{ content: "edited"; display: block; font-size: 9px; color: var(--gold); font-style: italic; }
+  #arrear-tfoot td{ font-weight: 700; border-top: 1.5px solid var(--ink); }
+  .foot-buttons{ display: flex; flex-wrap: wrap; gap: 8px; }
+  .arrear-panel .register-foot{ flex-wrap: wrap; gap: 10px; }
+  .arrear-panel .register-head{ flex-wrap: wrap; gap: 8px 16px; }
+  .arrear-generate{ width: auto; padding: 10px 18px; }
 
   .toast{
     position: fixed;
@@ -720,7 +745,7 @@
   }
   .layout{ flex: 1; min-height: 0; align-items: stretch; }
   .register-col{ display: flex; flex-direction: column; min-height: 0; }
-  .wage-panel.active, .exit-panel.active{
+  .wage-panel.active, .exit-panel.active, .arrear-panel.active{
     display: flex; flex-direction: column; flex: 1; min-height: 0;
   }
   .register{ display: flex; flex-direction: column; flex: 1; min-height: 0; }
