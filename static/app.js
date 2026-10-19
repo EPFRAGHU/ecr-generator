@@ -383,7 +383,15 @@ function onExitEdit(e){
 }
 
 // ---------- challan stub ----------
+// The summary follows the open tab: wage/exit register, Arrear Register or
+// POHW Arrear.
+let currentTab = 'wage';
+
+const monthLabel = m => new Date(m + '-01').toLocaleString('en-IN', {month:'long', year:'numeric'});
+
 function renderStub(){
+  if(currentTab === 'arrear') return renderArrearStub();
+  if(currentTab === 'pohw') return renderPohwStub();
   let gross=0, epfw=0, epsw=0, edliw=0, ac1ee=0, ac1er=0, ac10=0, vpf=0, hp116=0;
   wageRows.forEach(row=>{
     const c = calc(row);
@@ -397,11 +405,68 @@ function renderStub(){
     ac1er += c.diff;
     ac10 += c.epsContri;
   });
-  const ac1t = ac1ee + ac1er;
-  const ac2 = epfw < 1 ? 75 : Math.max(Math.round(epfw*0.005), 500);
-  const ac21 = Math.round(edliw*0.005);
+  const monthVal = document.getElementById('wage-month').value; // yyyy-mm
+  fillStub({
+    title: monthVal ? monthLabel(monthVal) : '',
+    note: monthVal === SPLIT_MONTH
+      ? 'Wage ceiling: ₹15,000 for 1–16 Sep, ₹25,000 from 17 Sep (S.O. 5109(E))'
+      : `Wage ceiling: ₹${fmt(ceilingFor(monthVal))}`,
+    gross, epfw, epsw, edliw, ac1ee, vpf, ac1er, hp116, ac10,
+    ac2: epfw < 1 ? 75 : Math.max(Math.round(epfw*0.005), 500),
+    ac21: Math.round(edliw*0.005),
+    wageLabels: '',
+  });
+}
+
+// Arrear challan: contributions from the arrear register; admin charges
+// 0.5% of arrear EPF wages and EDLI 0.5% of arrear EDLI wages, with no
+// minimum (the ₹500 monthly minimum is not applied to an arrear).
+function renderArrearStub(){
+  const months = arrearMonths();
+  const rate = document.getElementById('arrear-rate').value;
+  let epfw=0, epsw=0, edliw=0, ac1ee=0, ac1er=0, ac10=0;
+  arrearRows.forEach(row=>{
+    const c = calcArrear(row, months, rate);
+    epfw += c.epfW; epsw += c.epsW; edliw += c.edliW;
+    ac1ee += c.ee; ac1er += c.er; ac10 += c.eps;
+  });
+  const [f, t] = [document.getElementById('arrear-from').value, document.getElementById('arrear-till').value];
+  fillStub({
+    title: months.length ? (f === t ? `Arrear — ${monthLabel(f)}` : `Arrear — ${monthLabel(f)} to ${monthLabel(t)}`) : 'Arrear',
+    note: `${months.length} month${months.length === 1 ? '' : 's'} · contribution rate ${rate}% · admin and EDLI at 0.5% of arrear wages`,
+    gross: null, epfw, epsw, edliw, ac1ee, vpf: 0, ac1er, hp116: 0, ac10,
+    ac2: Math.round(epfw*0.005),
+    ac21: Math.round(edliw*0.005),
+    wageLabels: 'Arrear ',
+  });
+}
+
+// POHW arrear challan: only the EPS share (A/c No. 10); every other field
+// in the POHW file is 0.
+function renderPohwStub(){
+  const ac10 = pohwRows.reduce((s, r)=> s + (Number(String(r.eps_share ?? '').replace(/,/g, '')) || 0), 0);
+  const monthVal = wageMonth();
+  fillStub({
+    title: monthVal ? `POHW arrear — ${monthLabel(monthVal)}` : 'POHW arrear',
+    note: 'Pension on higher wages: only the arrear EPS share is paid (A/c No. 10)',
+    gross: null, epfw: 0, epsw: 0, edliw: 0, ac1ee: 0, vpf: 0, ac1er: 0, hp116: 0, ac10,
+    ac2: 0, ac21: 0,
+    wageLabels: 'Arrear ',
+  });
+}
+
+function fillStub(v){
   const ac22 = 0;
-  const grand = ac1t + ac10 + ac2 + ac21 + ac22;
+  const ac1t = v.ac1ee + v.ac1er;
+  const grand = ac1t + v.ac10 + v.ac2 + v.ac21 + ac22;
+  const gross = v.gross ?? 0;
+  const {epfw, epsw, edliw, ac1ee, vpf, ac1er, hp116, ac10, ac2, ac21} = v;
+  document.getElementById('s-gross-row').hidden = v.gross === null;
+  document.getElementById('s-epfw-lbl').textContent = `${v.wageLabels}EPF wages`;
+  document.getElementById('s-epsw-lbl').textContent = `${v.wageLabels}EPS wages`;
+  document.getElementById('s-edliw-lbl').textContent = `${v.wageLabels}EDLI wages`;
+  document.querySelector('.stub-top h3').textContent = v.title;
+  document.getElementById('stub-ceiling').textContent = v.note;
 
   document.getElementById('s-gross').textContent = fmt(gross);
   document.getElementById('s-epfw').textContent = fmt(epfw);
@@ -428,14 +493,6 @@ function renderStub(){
   document.getElementById('stub-estab').textContent = code;
   document.getElementById('fname-ecr').textContent = `${code}${yy}${mm}.txt`;
   document.getElementById('fname-exit').textContent = `${code}${yy}${mm}exit.txt`;
-
-  if(monthVal){
-    const monthName = new Date(monthVal+'-01').toLocaleString('en-IN',{month:'long', year:'numeric'});
-    document.querySelector('.stub-top h3').textContent = monthName;
-  }
-  document.getElementById('stub-ceiling').textContent = monthVal === SPLIT_MONTH
-    ? 'Wage ceiling: ₹15,000 for 1–16 Sep, ₹25,000 from 17 Sep (S.O. 5109(E))'
-    : `Wage ceiling: ₹${fmt(ceilingFor(monthVal))}`;
 }
 
 // ---------- registration gate ----------
@@ -525,7 +582,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.getElementById('panel-exit').classList.toggle('active', tab==='exit');
     document.getElementById('panel-arrear').classList.toggle('active', tab==='arrear');
     document.getElementById('panel-pohw').classList.toggle('active', tab==='pohw');
-    document.body.classList.toggle('arrear-mode', tab==='arrear' || tab==='pohw');
+    document.body.classList.toggle('arrear-mode', tab==='arrear');
+    document.body.classList.toggle('pohw-mode', tab==='pohw');
+    currentTab = tab;
+    renderStub();
   });
 });
 
@@ -1037,6 +1097,7 @@ function renderArrearTable(){
   const [f, t] = [document.getElementById('arrear-from').value, document.getElementById('arrear-till').value];
   document.getElementById('fname-arrear').textContent =
     f && t ? `${code}ARR${f.replace('-','')}${t.replace('-','')}.txt` : '';
+  if(currentTab === 'arrear') renderStub();
 
   tbody.querySelectorAll('[data-afield]').forEach(cell=>{
     cell.addEventListener('focus', ()=>{
@@ -1191,6 +1252,7 @@ function renderPohwTable(){
   const code = (document.getElementById('estab-code').value.trim() || 'ESTABCODE').replace(/[^A-Za-z0-9]/g, '').slice(0, 15);
   const month = wageMonth();
   document.getElementById('fname-pohw').textContent = month ? `${code}POHW${month.replace('-','')}.txt` : '';
+  if(currentTab === 'pohw') renderStub();
 
   tbody.querySelectorAll('[data-pfield]').forEach(cell=>{
     if(cell.dataset.pfield === 'eps_share') cell.addEventListener('focus', ()=>{ cell.textContent = ''; });

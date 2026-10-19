@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.10.0"
-APP_BUILD = "19-10-2026 11:28 IST"
+APP_VERSION = "1.10.1"
+APP_BUILD = "19-10-2026 11:43 IST"
 
 
 @app.context_processor

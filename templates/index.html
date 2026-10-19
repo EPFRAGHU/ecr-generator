@@ -225,9 +225,6 @@
             <a class="btn ghost" href="/api/pohw/template/ECR_POHW_arrear_upload_template.xlsx" download="ECR_POHW_arrear_upload_template.xlsx">Download sample Excel</a>
             <button class="btn danger" id="pohw-clear-btn" type="button">Clear</button>
           </div>
-          <button class="btn-generate arrear-generate" id="gen-pohw-btn" type="button">Generate POHW arrear text file
-            <span class="fname" id="fname-pohw"></span>
-          </button>
         </div>
       </div>
     </div>
@@ -283,9 +280,6 @@
             <a class="btn ghost" href="/api/arrear/template/ECR_arrear_upload_template.xlsx" download="ECR_arrear_upload_template.xlsx">Download sample Excel</a>
             <button class="btn danger" id="arrear-clear-btn" type="button">Clear</button>
           </div>
-          <button class="btn-generate arrear-generate" id="gen-arrear-btn" type="button">Generate arrear text file
-            <span class="fname" id="fname-arrear"></span>
-          </button>
         </div>
       </div>
     </div>
@@ -301,10 +295,10 @@
     </div>
     <div class="stub-body">
       <div class="stub-ceiling" id="stub-ceiling"></div>
-      <div class="stub-row"><span class="lbl">Gross wages</span><span class="val" id="s-gross">0</span></div>
-      <div class="stub-row"><span class="lbl">EPF wages</span><span class="val" id="s-epfw">0</span></div>
-      <div class="stub-row"><span class="lbl">EPS wages</span><span class="val" id="s-epsw">0</span></div>
-      <div class="stub-row"><span class="lbl">EDLI wages</span><span class="val" id="s-edliw">0</span></div>
+      <div class="stub-row" id="s-gross-row"><span class="lbl">Gross wages</span><span class="val" id="s-gross">0</span></div>
+      <div class="stub-row"><span class="lbl" id="s-epfw-lbl">EPF wages</span><span class="val" id="s-epfw">0</span></div>
+      <div class="stub-row"><span class="lbl" id="s-epsw-lbl">EPS wages</span><span class="val" id="s-epsw">0</span></div>
+      <div class="stub-row"><span class="lbl" id="s-edliw-lbl">EDLI wages</span><span class="val" id="s-edliw">0</span></div>
 
       <div class="stub-section-title">A/c No. 1 — EPF contribution</div>
       <div class="stub-row sub"><span class="lbl">Ee share</span><span class="val" id="s-ac1ee">0</span></div>
@@ -329,12 +323,19 @@
       <span class="val" id="s-grand">₹0</span>
     </div>
     <div class="stub-actions">
-      <button class="btn-generate" id="gen-ecr-btn">Generate ECR text file
+      <button class="btn-generate for-wage" id="gen-ecr-btn">Generate ECR text file
         <span class="fname" id="fname-ecr">ORBBS0017675000202608.txt</span>
       </button>
-      <button class="btn-generate" id="gen-exit-btn" style="background:var(--ink);">Generate exit text file
+      <button class="btn-generate for-wage" id="gen-exit-btn" style="background:var(--ink);">Generate exit text file
         <span class="fname" id="fname-exit">ORBBS0017675000202608exit.txt</span>
-      </button>    </div>
+      </button>
+      <button class="btn-generate for-arrear" id="gen-arrear-btn" type="button">Generate arrear text file
+        <span class="fname" id="fname-arrear"></span>
+      </button>
+      <button class="btn-generate for-pohw" id="gen-pohw-btn" type="button">Generate POHW arrear text file
+        <span class="fname" id="fname-pohw"></span>
+      </button>
+    </div>
   </div>
 
 </div>

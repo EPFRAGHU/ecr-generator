@@ -166,6 +166,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.10.1 | 19-10-2026 11:43 | Challan summary also on the Arrear Register (admin and EDLI at 0.5% of arrear wages, no minimum) and POHW Arrear (A/c No. 10 only) tabs, with each tab's Generate button in the summary |
 | 1.10.0 | 19-10-2026 11:28 | POHW Arrear tab: pension on higher wages arrear file (all fields 0 except the arrear EPS share), Excel/CSV upload and a sample Excel; typing into a blank UAN cell no longer loses the digits |
 | 1.9.0 | 19-10-2026 10:49 | Arrear Register tab: makes the portal's Arrear File Upload text file (8 fields), month-by-month arrears within each month's ceiling, 12%/10% rate, hand overrides, Excel/CSV upload and a sample Excel |
 | 1.8.0 | 15-10-2026 23:30 | "Import ECR file (.txt)" loads an ECR text file back into the wage register, working out each member's full-month wage and options; establishment code and wage month read from the file name |

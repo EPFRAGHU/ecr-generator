@@ -589,9 +589,11 @@
   .arrear-panel{ display:none; }
   .arrear-panel.active{ display:block; }
 
-  /* Arrear register: the challan summary belongs to the wage register, so
-     the arrear card takes the full width instead. */
-  body.arrear-mode .stub{ display: none; }
+  /* The challan summary follows the open tab: wage (and exit) register,
+     Arrear Register or POHW Arrear, each with its own Generate button. */
+  .stub .for-arrear, .stub .for-pohw{ display: none; }
+  body.arrear-mode .stub .for-wage, body.pohw-mode .stub .for-wage{ display: none; }
+  body.arrear-mode .stub .for-arrear, body.pohw-mode .stub .for-pohw{ display: block; }
   .arrear-controls{
     display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
     font-size: 12px; color: var(--ink-soft);
@@ -610,8 +612,6 @@
   .foot-buttons{ display: flex; flex-wrap: wrap; gap: 8px; }
   .arrear-panel .register-foot{ flex-wrap: wrap; gap: 10px; }
   .arrear-panel .register-head{ flex-wrap: wrap; gap: 8px 16px; }
-  .arrear-generate{ width: auto; padding: 10px 18px; }
-
   .toast{
     position: fixed;
     bottom: 26px;
