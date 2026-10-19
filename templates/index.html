@@ -84,6 +84,7 @@
     <button class="tab-btn active" data-tab="wage">Wage Register</button>
     <button class="tab-btn" data-tab="exit">Exit Register</button>
     <button class="tab-btn" data-tab="arrear">Arrear Register</button>
+    <button class="tab-btn" data-tab="pohw" title="Pension on higher wages: POHW arrear file">POHW Arrear</button>
   </div>
 </div>
 
@@ -189,6 +190,44 @@
           <div class="legend">
             <span><span class="swatch ink"></span> you enter</span>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POHW PANEL: file for the portal's "POHW Arrear File Upload" -->
+    <div class="arrear-panel" id="panel-pohw">
+      <div class="register">
+        <div class="register-head">
+          <h2>POHW Arrears — pension on higher wages</h2>
+          <span class="count" id="pohw-count">0 entries</span>
+        </div>
+        <p class="arrear-help">For the portal's POHW Arrear File Upload. Enter each member's arrear EPS share — the amount EPFO has worked out for the member's pension on higher wages. The file carries 0 for the arrear EPF, EPS and EDLI wages and the EE and ER shares, as the POHW help file requires. On the portal, the wage month must be the current wage month (the file name uses the Wage month above), and a UAN that already has an approved, in-process or paid POHW arrear cannot be filed again.</p>
+        <div class="ledger-scroll">
+        <table class="ledger" id="pohw-table">
+          <thead>
+            <tr>
+              <th class="left">#</th>
+              <th class="left">UAN</th>
+              <th class="left">Member name</th>
+              <th title="Arrear EPS share in whole rupees, more than 0">Arrear EPS share (₹)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="pohw-tbody"></tbody>
+          <tfoot id="pohw-tfoot"></tfoot>
+        </table>
+        </div>
+        <div class="register-foot">
+          <div class="foot-buttons">
+            <button class="btn" id="add-pohw-btn" type="button">+ Add member</button>
+            <button class="btn ghost" id="pohw-upload-btn" type="button">Upload Excel / CSV</button>
+            <input type="file" id="pohw-upload-input" accept=".xlsx,.xlsm,.xls,.csv" style="display:none;" />
+            <a class="btn ghost" href="/api/pohw/template/ECR_POHW_arrear_upload_template.xlsx" download="ECR_POHW_arrear_upload_template.xlsx">Download sample Excel</a>
+            <button class="btn danger" id="pohw-clear-btn" type="button">Clear</button>
+          </div>
+          <button class="btn-generate arrear-generate" id="gen-pohw-btn" type="button">Generate POHW arrear text file
+            <span class="fname" id="fname-pohw"></span>
+          </button>
         </div>
       </div>
     </div>

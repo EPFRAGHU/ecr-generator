@@ -720,6 +720,15 @@
   display:block;
   margin-top: 2px;
 }
+/* UAN problem note, shown under the value without being part of the
+   editable text, so an empty UAN cell can still be typed into. */
+td[data-note]:not([data-note=""])::after{
+  content: attr(data-note);
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--stamp);
+}
 /* ECR import: this line will be recalculated (not an error, so not red) */
 .import-note{
   display: block;

@@ -146,6 +146,27 @@ function renderBulkHp(){
 
 function isValidUAN(uan){ return /^\d{12}$/.test(String(uan||'').trim()); }
 
+// Editable cells can carry a small note under the value ("not 12 digits",
+// "ECR: 9,333", ...). A click on the note would put the cursor inside it and
+// typing would be lost, so keep the cursor just before the note instead.
+const NOTE_SELECTOR = '.issue-note, .calc-note, .import-note';
+document.addEventListener('selectionchange', ()=>{
+  const s = window.getSelection();
+  if(!s.rangeCount || !s.anchorNode) return;
+  const el = s.anchorNode.nodeType === Node.ELEMENT_NODE ? s.anchorNode : s.anchorNode.parentElement;
+  const note = el && el.closest(NOTE_SELECTOR);
+  if(!note || !note.parentElement || !note.parentElement.isContentEditable) return;
+  const cell = note.parentElement;
+  const range = document.createRange();
+  const text = note.previousSibling;
+  if(text && text.nodeType === Node.TEXT_NODE) range.setStart(text, text.length);
+  else range.setStartBefore(note);
+  range.collapse(true);
+  s.removeAllRanges();
+  s.addRange(range);
+  if(document.activeElement !== cell) cell.focus();
+});
+
 // Names and UANs come from uploaded files, so escape them before they go
 // into innerHTML.
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g,
@@ -216,12 +237,12 @@ function renderWageTable(){
       ? `<span class="calc-note" contenteditable="false">ECR: ${fmt(c.epfW)}</span>` : '';
     tr.innerHTML = `
       <td class="rownum">${i+1}</td>
-      <td class="left editable" contenteditable="true" data-field="uan" data-i="${i}">${escapeHtml(row.uan)}${uanNote ? `<span class="issue-note">${uanNote}</span>` : ''}</td>
+      <td class="left editable" contenteditable="true" data-field="uan" data-i="${i}" data-note="${escapeHtml(uanNote)}">${escapeHtml(row.uan)}</td>
       <td class="left editable" contenteditable="true" data-field="name" data-i="${i}">${escapeHtml(row.name)}${row.importNote ? `<span class="import-note" contenteditable="false" title="This line of the imported ECR file does not match this tool's calculation. Generating the ECR will use the recalculated figures.">${escapeHtml(row.importNote)}</span>` : ''}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="gross" data-i="${i}">${row.gross}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="epf" data-i="${i}">${row.epf}${epfNote}</td>
-      <td class="editable input-box" contenteditable="true" inputmode="numeric" data-field="ncp" data-i="${i}">${row.ncp ?? 0}${ncpBad ? `<span class="issue-note">${ncpBad}</span>` : ''}</td>
-      <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="vpf" data-i="${i}">${row.vpf ?? 0}${vpfBad ? `<span class="issue-note">${vpfBad}</span>` : ''}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="numeric" data-field="ncp" data-i="${i}">${row.ncp ?? 0}${ncpBad ? `<span class="issue-note" contenteditable="false">${ncpBad}</span>` : ''}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="vpf" data-i="${i}">${row.vpf ?? 0}${vpfBad ? `<span class="issue-note" contenteditable="false">${vpfBad}</span>` : ''}</td>
       <td><select class="cell-select" data-sfield="higher" data-i="${i}" ${hp ? 'disabled title="Set by Higher pension"' : ''}>${higherOpts}</select></td>
       <td><select class="cell-select" data-sfield="eps" data-i="${i}">${epsOpts}</select></td>
       <td><select class="cell-select" data-sfield="hp" data-i="${i}" ${row.eps==='N' ? 'disabled title="EPS members only"' : ''}>${hpOpts}</select></td>
@@ -503,7 +524,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.getElementById('panel-wage').classList.toggle('active', tab==='wage');
     document.getElementById('panel-exit').classList.toggle('active', tab==='exit');
     document.getElementById('panel-arrear').classList.toggle('active', tab==='arrear');
-    document.body.classList.toggle('arrear-mode', tab==='arrear');
+    document.getElementById('panel-pohw').classList.toggle('active', tab==='pohw');
+    document.body.classList.toggle('arrear-mode', tab==='arrear' || tab==='pohw');
   });
 });
 
@@ -988,7 +1010,7 @@ function renderArrearTable(){
     if(issue) tr.classList.add('issue-row');
     tr.innerHTML = `
       <td class="rownum">${i+1}</td>
-      <td class="left editable" contenteditable="true" data-afield="uan" data-i="${i}">${escapeHtml(row.uan)}${issue ? `<span class="issue-note">${issue}</span>` : ''}</td>
+      <td class="left editable" contenteditable="true" data-afield="uan" data-i="${i}" data-note="${escapeHtml(issue)}">${escapeHtml(row.uan)}</td>
       <td class="left editable" contenteditable="true" data-afield="name" data-i="${i}">${escapeHtml(row.name)}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-afield="paid" data-i="${i}">${escapeHtml(row.paid)}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-afield="revised" data-i="${i}">${escapeHtml(row.revised)}</td>
@@ -1129,6 +1151,116 @@ document.getElementById('gen-arrear-btn').addEventListener('click', ()=>{
   }, 'arrear.txt');
 });
 
+// ---------- POHW arrear register ----------
+// Pension on higher wages: file for the portal's POHW Arrear File Upload.
+// Per the POHW help file every field is 0 except the arrear EPS share,
+// which must be more than 0. Keep pohwIssue() in sync with
+// pohw_amount_issue() in app.py.
+let pohwRows = [];
+
+function pohwIssue(row){
+  if(!isValidUAN(row.uan)) return 'not 12 digits';
+  const s = String(row.eps_share ?? '').trim().replace(/,/g, '');
+  if(!/^\d+(\.0+)?$/.test(s)) return 'EPS share must be a whole number of rupees';
+  if(Number(s) <= 0) return 'EPS share must be more than 0';
+  const uan = String(row.uan).trim();
+  return pohwRows.some(r => r !== row && String(r.uan).trim() === uan) ? 'duplicate UAN' : '';
+}
+
+function renderPohwTable(){
+  const tbody = document.getElementById('pohw-tbody');
+  tbody.innerHTML = '';
+  let total = 0;
+  pohwRows.forEach((row, i)=>{
+    const issue = pohwIssue(row);
+    total += Number(String(row.eps_share).replace(/,/g, '')) || 0;
+    const tr = document.createElement('tr');
+    if(issue) tr.classList.add('issue-row');
+    tr.innerHTML = `
+      <td class="rownum">${i+1}</td>
+      <td class="left editable" contenteditable="true" data-pfield="uan" data-i="${i}" data-note="${escapeHtml(issue)}">${escapeHtml(row.uan)}</td>
+      <td class="left editable" contenteditable="true" data-pfield="name" data-i="${i}">${escapeHtml(row.name)}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="numeric" data-pfield="eps_share" data-i="${i}">${escapeHtml(row.eps_share)}</td>
+      <td class="delete-cell"><button class="del-btn" data-pdel="${i}">×</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('pohw-tfoot').innerHTML = pohwRows.length
+    ? `<tr><td></td><td class="left" colspan="2">Total (${pohwRows.length} member${pohwRows.length === 1 ? '' : 's'})</td><td>${fmt(total)}</td><td></td></tr>` : '';
+  document.getElementById('pohw-count').textContent = `${pohwRows.length} entries`;
+  const code = (document.getElementById('estab-code').value.trim() || 'ESTABCODE').replace(/[^A-Za-z0-9]/g, '').slice(0, 15);
+  const month = wageMonth();
+  document.getElementById('fname-pohw').textContent = month ? `${code}POHW${month.replace('-','')}.txt` : '';
+
+  tbody.querySelectorAll('[data-pfield]').forEach(cell=>{
+    if(cell.dataset.pfield === 'eps_share') cell.addEventListener('focus', ()=>{ cell.textContent = ''; });
+    cell.addEventListener('blur', e=>{
+      const row = pohwRows[Number(cell.dataset.i)];
+      const note = cell.querySelector('.issue-note');
+      const val = cell.textContent.replace(note ? note.textContent : '', '').trim();
+      // An amount cell left blank keeps its previous value.
+      if(!(cell.dataset.pfield === 'eps_share' && val === '')) row[cell.dataset.pfield] = val.replace(/,/g, cell.dataset.pfield === 'eps_share' ? '' : ',');
+      const next = e.relatedTarget;
+      const sel = next && next.dataset && next.dataset.pfield ? `[data-pfield="${next.dataset.pfield}"][data-i="${next.dataset.i}"]` : null;
+      renderPohwTable();
+      const target = sel && document.querySelector(`#pohw-tbody ${sel}`);
+      if(target) target.focus();
+    });
+  });
+  tbody.querySelectorAll('[data-pdel]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      pohwRows.splice(Number(btn.dataset.pdel), 1);
+      renderPohwTable();
+    });
+  });
+}
+
+document.getElementById('estab-code').addEventListener('input', renderPohwTable);
+document.getElementById('wage-month').addEventListener('input', renderPohwTable);
+document.getElementById('add-pohw-btn').addEventListener('click', ()=>{
+  pohwRows.push({uan:'', name:'New member', eps_share:''});
+  renderPohwTable();
+});
+document.getElementById('pohw-clear-btn').addEventListener('click', ()=>{
+  if(!pohwRows.length){ showToast('Nothing to clear'); return; }
+  if(!confirm(`Clear all ${pohwRows.length} POHW row${pohwRows.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+  pohwRows = [];
+  renderPohwTable();
+});
+
+const pohwUploadInput = document.getElementById('pohw-upload-input');
+document.getElementById('pohw-upload-btn').addEventListener('click', ()=> pohwUploadInput.click());
+pohwUploadInput.addEventListener('change', async ()=>{
+  const file = pohwUploadInput.files[0];
+  pohwUploadInput.value = '';
+  if(!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  let resp;
+  try{
+    resp = await fetch('/api/pohw/upload', {method:'POST', body: formData});
+  }catch(err){
+    showToast('Upload failed — could not reach the server');
+    return;
+  }
+  if(handleNeedsRegistration(resp)) return;
+  const data = await resp.json().catch(()=>({error:'Upload failed'}));
+  if(!resp.ok){ showToast(data.error || 'Upload failed', 6000); return; }
+  pohwRows.push(...data.rows.map(r=>({uan: r.uan, name: r.name, eps_share: r.eps_share})));
+  renderPohwTable();
+  const bad = pohwRows.filter(pohwIssue).length;
+  showToast(`Imported ${data.rows.length} row${data.rows.length === 1 ? '' : 's'}` + (bad ? ` — ${bad} need a look (highlighted in red)` : ''), 4000);
+});
+
+document.getElementById('gen-pohw-btn').addEventListener('click', ()=>{
+  const estab_code = document.getElementById('estab-code').value.trim();
+  const wage_month = wageMonth();
+  if(!estab_code || !wage_month){ showToast('Enter establishment code and wage month first'); return; }
+  if(!pohwRows.length){ showToast('Add at least one member to the POHW arrear register'); return; }
+  if(pohwRows.some(pohwIssue)){ showToast('Fix the rows highlighted in red before generating'); return; }
+  downloadGenerated('/api/pohw/generate', {estab_code, wage_month, rows: pohwRows}, 'pohw.txt');
+});
+
 // ---------- init ----------
 // Default wage month: the month before the current one (ECRs are filed for
 // the previous month's wages).
@@ -1145,3 +1277,4 @@ renderWageTable();
 renderExitTable();
 renderStub();
 renderArrearTable();
+renderPohwTable();

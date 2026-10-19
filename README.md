@@ -76,6 +76,16 @@ minutes. Visitors stay registered on their device for a year.
   cells can be overridden by hand. Excel/CSV upload with a sample sheet
   (`/api/arrear/template`); file name `<estab>ARR<from><till>.txt` (letters
   and digits only, 30 characters, within the portal's 32 limit).
+- **POHW Arrear tab** — pension on higher wages: makes the text file for the
+  portal's "POHW Arrear File Upload" (8 `#~#` fields: UAN, name, arrear EPF
+  / EPS / EDLI wages, arrear EPF EE share, arrear EPF ER share, arrear EPS
+  share). Per the POHW help file every field is 0 except the arrear EPS
+  share, which must be more than 0 — the amount EPFO has worked out for the
+  member — so only that amount is entered per member. Excel/CSV upload with
+  a sample sheet (`/api/pohw/template`); file name `<estab>POHW<YYYYMM>.txt`
+  using the page's wage month. On the portal the wage month must be the
+  current wage month, and a UAN already with an approved, in-process or
+  paid POHW arrear cannot be filed again.
 - **Import ECR file** — loads an ECR text file (`#~#` format, 11 fields) back
   into the wage register. Each line is worked back to the full-month EPF
   wage and the member's options (EPS member, higher EPF, higher pension,
@@ -156,6 +166,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.10.0 | 19-10-2026 11:28 | POHW Arrear tab: pension on higher wages arrear file (all fields 0 except the arrear EPS share), Excel/CSV upload and a sample Excel; typing into a blank UAN cell no longer loses the digits |
 | 1.9.0 | 19-10-2026 10:49 | Arrear Register tab: makes the portal's Arrear File Upload text file (8 fields), month-by-month arrears within each month's ceiling, 12%/10% rate, hand overrides, Excel/CSV upload and a sample Excel |
 | 1.8.0 | 15-10-2026 23:30 | "Import ECR file (.txt)" loads an ECR text file back into the wage register, working out each member's full-month wage and options; establishment code and wage month read from the file name |
 | 1.7.1 | 15-10-2026 16:01 | Challan summary shows the higher pension 1.16% in small type under Er share and EPS total |

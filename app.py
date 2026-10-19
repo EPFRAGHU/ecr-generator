@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.9.0"
-APP_BUILD = "19-10-2026 10:49 IST"
+APP_VERSION = "1.10.0"
+APP_BUILD = "19-10-2026 11:28 IST"
 
 
 @app.context_processor
@@ -97,7 +97,7 @@ _registrations_by_ip: dict[str, list[float]] = {}
 
 ADMIN_ENDPOINTS = {"admin", "admin_export", "admin_delete"}
 REGISTERED_ENDPOINTS = {"upload", "import_ecr", "generate_ecr", "generate_exit",
-                        "generate_arrear", "upload_arrear"}
+                        "generate_arrear", "upload_arrear", "generate_pohw", "upload_pohw"}
 
 
 def _recent(log: dict[str, list[float]], ip: str, window: float) -> list[float]:
@@ -1317,6 +1317,165 @@ def arrear_template():
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
         download_name=ARREAR_TEMPLATE_FILENAME,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POHW arrear file (EPFO Unified Portal: POHW Arrear File Upload) —
+# pension on higher wages. 8 #~#-separated fields per member: UAN, member
+# name, arrear EPF wages, arrear EPS wages, arrear EDLI wages, arrear EPF EE
+# share, arrear EPF ER share, arrear EPS share. Per the POHW help file all
+# wages and shares are 0 except the EPS share, which must be more than 0:
+# the amount EPFO has worked out for the member's pension on higher wages.
+# The wage month (which must be the current wage month), contribution rate
+# and remarks are entered on the portal form; one POHW arrear per UAN.
+# ---------------------------------------------------------------------------
+POHW_TEMPLATE_FILENAME = "ECR_POHW_arrear_upload_template.xlsx"
+POHW_FIELD_SYNONYMS = {
+    "uan": ["uan", "universal account number", "member uan"],
+    "name": ["member name", "employee name", "name"],
+    "eps_share": ["arrear eps share", "eps share", "pohw amount", "eps amount"],
+}
+
+
+def pohw_amount_issue(value) -> str:
+    s = str(value if value is not None else "").strip().replace(",", "")
+    if not re.fullmatch(r"\d+(\.0+)?", s):
+        return "EPS share must be a whole number of rupees"
+    return "" if int(float(s)) > 0 else "EPS share must be more than 0"
+
+
+def _pohw_filename(estab_code: str, wage_month: str) -> str:
+    # Portal rule: letters and digits only, at most 32 characters.
+    code = re.sub(r"[^A-Za-z0-9]", "", estab_code)[:15]
+    return f"{code}POHW{wage_month.replace('-', '')}.txt"
+
+
+@app.route("/api/pohw/generate", methods=["POST"])
+def generate_pohw():
+    data = request.get_json(force=True)
+    estab_code = (data.get("estab_code") or "").strip()
+    wage_month = data.get("wage_month", "")
+    rows = data.get("rows") or []
+    if not estab_code:
+        return jsonify({"error": "Establishment code is required"}), 400
+    if not MONTH_RE.fullmatch(wage_month or ""):
+        return jsonify({"error": "Choose the wage month"}), 400
+    if not rows:
+        return jsonify({"error": "Add at least one member to the POHW arrear register"}), 400
+    for n, row in enumerate(rows, start=1):
+        if not re.fullmatch(r"\d{12}", str(row.get("uan", "")).strip()):
+            return jsonify({"error": f"Row {n}: UAN is not a 12-digit number"}), 400
+        issue = pohw_amount_issue(row.get("eps_share"))
+        if issue:
+            return jsonify({"error": f"Row {n}: {issue}"}), 400
+    dup = duplicate_uan_issue(rows)
+    if dup:
+        return jsonify({"error": dup}), 400
+
+    lines = []
+    for row in rows:
+        amount = int(float(str(row.get("eps_share")).strip().replace(",", "")))
+        lines.append("#~#".join([
+            str(row.get("uan", "")).strip()[:12],
+            str(row.get("name", "")).strip().upper(),
+            "0", "0", "0", "0", "0", str(amount),
+        ]))
+    content = "\r\n".join(lines) + "\r\n"
+    _log("pohw")
+    return send_file(
+        io.BytesIO(content.encode("utf-8")),
+        mimetype="text/plain",
+        as_attachment=True,
+        download_name=_pohw_filename(estab_code, wage_month),
+    )
+
+
+@app.route("/api/pohw/upload", methods=["POST"])
+def upload_pohw():
+    import pandas as pd
+
+    file = request.files.get("file")
+    if file is None:
+        return jsonify({"error": "No file uploaded"}), 400
+    filename = (file.filename or "").lower()
+    try:
+        if filename.endswith((".xlsx", ".xlsm", ".xls")):
+            df = pd.read_excel(file, dtype=str)
+        else:
+            df = pd.read_csv(file, dtype=str)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": f"Could not read file: {exc}"}), 400
+    df = df.dropna(how="all")
+
+    mapping = _guess_columns([str(c) for c in df.columns], POHW_FIELD_SYNONYMS)
+    missing = [f for f in POHW_FIELD_SYNONYMS if not mapping.get(f)]
+    if missing:
+        names = {"uan": "UAN", "name": "Member name", "eps_share": "Arrear EPS share"}
+        return jsonify({"error": "Columns not found: " + ", ".join(names[f] for f in missing)
+                        + ". Use the POHW sample Excel."}), 400
+
+    rows = []
+    for _, r in df.iterrows():
+        def get(field):
+            val = r.get(mapping[field], "")
+            return "" if pd.isna(val) else _whole_number_text(str(val).strip())
+
+        rows.append({
+            "uan": re.sub(r"\D", "", get("uan"))[:12],
+            "name": get("name"),
+            "eps_share": get("eps_share").replace(",", ""),
+        })
+    _log("upload")
+    return jsonify({"status": "ok", "rows": rows})
+
+
+@app.route("/api/pohw/template")
+@app.route(f"/api/pohw/template/{POHW_TEMPLATE_FILENAME}")
+def pohw_template():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "POHW arrears"
+    for idx, (name, width) in enumerate(
+        [("UAN", 16), ("Member name", 30), ("Arrear EPS share", 18)], start=1
+    ):
+        cell = ws.cell(row=1, column=idx, value=name)
+        cell.font = Font(bold=True)
+        ws.column_dimensions[cell.column_letter].width = width
+    ws.append(["100000000001", "SAMPLE MEMBER ONE", 15000])
+    ws.append(["100000000002", "SAMPLE MEMBER TWO", 48250])
+    for row in range(2, 1001):
+        ws.cell(row=row, column=1).number_format = "@"
+    ws.freeze_panes = "A2"
+
+    notes = wb.create_sheet("Instructions")
+    for line in [
+        ["POHW (pension on higher wages) arrear upload sheet — one row per member. Replace the two sample rows."],
+        [],
+        ["UAN", "12-digit UAN (required)"],
+        ["Member name", "As in the UAN record (required)"],
+        ["Arrear EPS share", "Amount in whole rupees to be remitted to EPS for the member's pension on higher wages, as worked out by EPFO (required, more than 0)"],
+        [],
+        ["File format", "UAN#~#NAME#~#0#~#0#~#0#~#0#~#0#~#EPS share — arrear EPF, EPS and EDLI wages and the EE and ER shares are always 0"],
+        ["On the portal", "POHW Arrear File Upload: the wage month must be the current wage month; choose the contribution rate and enter remarks there"],
+        ["", "A UAN that already has an approved, in-process or paid POHW arrear ECR cannot be filed again"],
+    ]:
+        notes.append(line)
+    notes.column_dimensions["A"].width = 22
+    notes.column_dimensions["B"].width = 120
+    notes["A1"].font = Font(bold=True)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=POHW_TEMPLATE_FILENAME,
     )
 
 
