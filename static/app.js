@@ -233,6 +233,8 @@ function renderWageTable(){
       `<option value="${v}" ${(hp ? 'Y' : 'N')===v?'selected':''}>${l}</option>`).join('');
     const sepOpts = Object.entries(SEP_BASES).map(([v,l])=>
       `<option value="${v}" ${(row.sep||'cap')===v?'selected':''}>${l}</option>`).join('');
+    // Exempted schemes show 0 here, as in the ECR file: no EPF EE/ER shares, no EDLI wages.
+    const [epfEx, edliEx] = [exemptStatus()[0] === 'E', exemptStatus()[2] === 'E'];
     const epfNote = c.epfW !== Math.round(Number(row.epf)||0)
       ? `<span class="calc-note" contenteditable="false">ECR: ${fmt(c.epfW)}</span>` : '';
     tr.innerHTML = `
@@ -248,10 +250,10 @@ function renderWageTable(){
       <td><select class="cell-select" data-sfield="hp" data-i="${i}" ${row.eps==='N' ? 'disabled title="EPS members only"' : ''}>${hpOpts}</select></td>
       <td class="split-col"><select class="cell-select" data-sfield="sep" data-i="${i}" ${row.eps==='N'?'disabled':''}>${sepOpts}</select></td>
       <td class="calc">${fmt(c.eps)}</td>
-      <td class="calc">${fmt(c.edli)}</td>
-      <td class="calc">${fmt(c.epfContri)}</td>
+      <td class="calc">${fmt(edliEx ? 0 : c.edli)}</td>
+      <td class="calc">${fmt(epfEx ? 0 : c.epfContri)}</td>
       <td class="calc">${fmt(c.epsContri)}</td>
-      <td class="calc">${fmt(c.diff)}</td>
+      <td class="calc">${fmt(epfEx ? 0 : c.diff)}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="refund" data-i="${i}">${row.refund}</td>
       <td class="delete-cell"><button class="del-btn" data-del="${i}">×</button></td>
     `;
@@ -687,6 +689,7 @@ function showInspFields(){
 document.getElementById('exempt-status').addEventListener('change', e=>{
   try { localStorage.setItem(EXEMPT_KEY, e.target.value); } catch(err) {}
   showInspFields();
+  renderWageTable();
   renderStub();
 });
 {
@@ -1017,7 +1020,7 @@ document.getElementById('gen-ecr-btn').addEventListener('click', ()=>{
     showToast('Fix the rows highlighted in red (invalid or duplicate UAN, NCP days or VPF) before generating');
     return;
   }
-  downloadGenerated('/api/ecr/generate', {estab_code, wage_month, rows: wageRows}, 'ecr.txt');
+  downloadGenerated('/api/ecr/generate', {estab_code, wage_month, exempt: exemptStatus(), rows: wageRows}, 'ecr.txt');
 });
 
 document.getElementById('gen-exit-btn').addEventListener('click', ()=>{

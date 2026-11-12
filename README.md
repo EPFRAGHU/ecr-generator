@@ -166,6 +166,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.12.0 | 12-11-2026 23:53 | ECR text file follows the exemption status: an exempted EPF writes 0 for the EE share and the ER difference, and an exempted EDLI writes 0 EDLI wages; the wage register shows the same zeros. Inspection charges are still worked out on the actual wages |
 | 1.11.3 | 12-11-2026 23:29 | The exemption choice is remembered in the browser after a reload |
 | 1.11.2 | 12-11-2026 23:22 | Inspection charges per S.O. 2701(E) of 29-05-2026 (as corrected on 20-08-2026): EDLI default 0.005%; monthly challan minimum ₹8,750 PF and ₹1,250 EDLI from June 2026 (₹5 and ₹1 before); no minimum on arrear and POHW challans |
 | 1.11.1 | 12-11-2026 23:07 | Admin page warns when the visitor list is not on a persistent volume (it would be emptied by every redeploy), with the Coolify steps to fix it |

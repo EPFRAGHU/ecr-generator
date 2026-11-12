@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.11.3"
-APP_BUILD = "12-11-2026 23:29 IST"
+APP_VERSION = "1.12.0"
+APP_BUILD = "12-11-2026 23:53 IST"
 
 
 @app.context_processor
@@ -898,15 +898,24 @@ def upload_template():
     )
 
 
+EXEMPT_CODES = {"UUU", "EUU", "UUE", "EUE"}
+
+
 @app.route("/api/ecr/generate", methods=["POST"])
 def generate_ecr():
     data = request.get_json(force=True)
     estab_code = (data.get("estab_code") or "").strip()[:15]
     wage_month = data.get("wage_month")  # "YYYY-MM"
     rows = data.get("rows") or []
+    # EPF / EPS / EDLI exemption status. Exempted EPF: EE share and ER diff are 0
+    # (paid to the own PF trust). Exempted EDLI: EDLI wages are 0.
+    exempt = data.get("exempt") or "UUU"
 
     if not estab_code or not wage_month:
         return jsonify({"error": "Establishment code and wage month are required"}), 400
+    if exempt not in EXEMPT_CODES:
+        return jsonify({"error": "Exemption status must be UUU, EUU, UUE or EUE"}), 400
+    epf_ex, edli_ex = exempt[0] == "E", exempt[2] == "E"
 
     year, month = wage_month.split("-")
 
@@ -941,10 +950,10 @@ def generate_ecr():
             str(int(gross))[:10],
             str(calc["epf_wages"])[:10],
             str(calc["eps_wages"])[:10],
-            str(calc["edli_wages"])[:10],
-            str(calc["epf_contri"])[:10],
+            "0" if edli_ex else str(calc["edli_wages"])[:10],
+            "0" if epf_ex else str(calc["epf_contri"])[:10],
             str(calc["eps_contri"])[:10],
-            str(calc["diff"])[:10],
+            "0" if epf_ex else str(calc["diff"])[:10],
             str(ncp),
             str(refund)[:10] if float(refund or 0) > 0 else "0",
         ]
