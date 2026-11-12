@@ -455,12 +455,41 @@ function renderPohwStub(){
   });
 }
 
-function fillStub(v){
-  const ac22 = 0;
+// Exemption status: three letters for EPF / EPS / EDLI, U = paid to EPFO,
+// E = exempted. EPF exempted: A/c 1 goes to the own PF trust, and A/c 2
+// carries inspection charges instead of admin charges. EDLI exempted: no
+// A/c 21; A/c 22 carries EDLI inspection charges. EPS (A/c 10) is never exempted.
+const exemptStatus = () => document.getElementById('exempt-status').value;
+const inspRate = id => (Number(document.getElementById(id).value) || 0) / 100;
+
+function applyExemption(v){
+  const ex = exemptStatus();
+  const epfEx = ex[0] === 'E', edliEx = ex[2] === 'E';
+  const out = {...v, ac22: 0, epfEx, edliEx};
+  if(epfEx){
+    out.ac1ee = out.ac1er = out.vpf = out.hp116Er = 0;
+    // shortcut: no minimum applied to inspection charges; add one if EPFO prescribes it.
+    out.ac2 = Math.round(v.epfw * inspRate('insp-pf'));
+  }
+  if(edliEx){
+    out.ac21 = 0;
+    out.ac22 = Math.round(v.edliw * inspRate('insp-edli'));
+  }
+  return out;
+}
+
+function fillStub(raw){
+  const v = applyExemption({hp116Er: raw.hp116, ...raw});
+  const ac22 = v.ac22;
   const ac1t = v.ac1ee + v.ac1er;
   const grand = ac1t + v.ac10 + v.ac2 + v.ac21 + ac22;
   const gross = v.gross ?? 0;
   const {epfw, epsw, edliw, ac1ee, vpf, ac1er, hp116, ac10, ac2, ac21} = v;
+  document.getElementById('s-ac1-title').textContent = v.epfEx
+    ? 'A/c No. 1 — EPF (paid to own PF trust)' : 'A/c No. 1 — EPF contribution';
+  document.getElementById('s-ac2-title').textContent = v.epfEx
+    ? 'A/c No. 2 — Inspection charges' : 'A/c No. 2 — Admin charges';
+  document.getElementById('s-ac22-lbl').textContent = v.edliEx ? 'Inspection charges' : 'Admin charges';
   document.getElementById('s-gross-row').hidden = v.gross === null;
   document.getElementById('s-epfw-lbl').textContent = `${v.wageLabels}EPF wages`;
   document.getElementById('s-epsw-lbl').textContent = `${v.wageLabels}EPS wages`;
@@ -476,9 +505,9 @@ function fillStub(v){
   document.getElementById('s-vpf').textContent = fmt(vpf);
   document.getElementById('s-vpf-row').hidden = vpf === 0;
   document.getElementById('s-ac1er').textContent = fmt(ac1er);
-  ['s-er116', 's-eps116'].forEach(id=>{
-    document.getElementById(id).textContent = fmt(hp116);
-    document.getElementById(`${id}-row`).hidden = hp116 === 0;
+  [['s-er116', v.hp116Er], ['s-eps116', hp116]].forEach(([id, amt])=>{
+    document.getElementById(id).textContent = fmt(amt);
+    document.getElementById(`${id}-row`).hidden = amt === 0;
   });
   document.getElementById('s-ac1t').textContent = fmt(ac1t);
   document.getElementById('s-ac10').textContent = fmt(ac10);
@@ -643,6 +672,12 @@ document.getElementById('add-exit-btn').addEventListener('click', ()=>{
   renderExitTable();
 });
 document.getElementById('estab-code').addEventListener('input', renderStub);
+document.getElementById('exempt-status').addEventListener('change', e=>{
+  document.getElementById('insp-pf-field').hidden = e.target.value[0] !== 'E';
+  document.getElementById('insp-edli-field').hidden = e.target.value[2] !== 'E';
+  renderStub();
+});
+['insp-pf', 'insp-edli'].forEach(id=> document.getElementById(id).addEventListener('input', renderStub));
 document.getElementById('wage-month').addEventListener('input', ()=>{
   renderWageTable();
   renderStub();

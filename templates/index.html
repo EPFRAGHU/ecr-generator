@@ -80,6 +80,23 @@
     <label for="wage-month">Wage month</label>
     <input id="wage-month" type="month" />
   </div>
+  <div class="field">
+    <label for="exempt-status" title="Three letters for EPF / EPS / EDLI. U = unexempted (paid to EPFO), E = exempted (own PF trust or own EDLI insurance). EPS cannot be exempted.">Exemption</label>
+    <select id="exempt-status">
+      <option value="UUU">UUU — unexempted</option>
+      <option value="EUU">EUU — own PF trust</option>
+      <option value="UUE">UUE — own EDLI scheme</option>
+      <option value="EUE">EUE — PF trust + EDLI scheme</option>
+    </select>
+  </div>
+  <div class="field rate" id="insp-pf-field" hidden>
+    <label for="insp-pf" title="Inspection charges paid by a PF-exempted establishment in place of A/c No. 2 admin charges, as % of EPF wages">PF inspection %</label>
+    <input id="insp-pf" type="number" step="0.001" min="0" value="0.18" />
+  </div>
+  <div class="field rate" id="insp-edli-field" hidden>
+    <label for="insp-edli" title="Inspection charges paid by an EDLI-exempted establishment in A/c No. 22, as % of EDLI wages">EDLI inspection %</label>
+    <input id="insp-edli" type="number" step="0.001" min="0" value="0" />
+  </div>
   <div class="tabs">
     <button class="tab-btn active" data-tab="wage">Wage Register</button>
     <button class="tab-btn" data-tab="exit">Exit Register</button>
@@ -300,7 +317,7 @@
       <div class="stub-row"><span class="lbl" id="s-epsw-lbl">EPS wages</span><span class="val" id="s-epsw">0</span></div>
       <div class="stub-row"><span class="lbl" id="s-edliw-lbl">EDLI wages</span><span class="val" id="s-edliw">0</span></div>
 
-      <div class="stub-section-title">A/c No. 1 — EPF contribution</div>
+      <div class="stub-section-title" id="s-ac1-title">A/c No. 1 — EPF contribution</div>
       <div class="stub-row sub"><span class="lbl">Ee share</span><span class="val" id="s-ac1ee">0</span></div>
       <div class="stub-row sub note" id="s-vpf-row" hidden><span class="lbl">incl. VPF</span><span class="val" id="s-vpf">0</span></div>
       <div class="stub-row sub"><span class="lbl">Er share</span><span class="val" id="s-ac1er">0</span></div>
@@ -311,12 +328,12 @@
       <div class="stub-row sub"><span class="lbl">Total</span><span class="val" id="s-ac10">0</span></div>
       <div class="stub-row sub note" id="s-eps116-row" title="Higher pension: 1.16% of wages above the ceiling, paid into EPS out of the employer's 12%" hidden><span class="lbl">incl. 1.16% on higher wages</span><span class="val" id="s-eps116">0</span></div>
 
-      <div class="stub-section-title">A/c No. 2 — Admin charges</div>
+      <div class="stub-section-title" id="s-ac2-title">A/c No. 2 — Admin charges</div>
       <div class="stub-row sub"><span class="lbl">Total</span><span class="val" id="s-ac2">0</span></div>
 
       <div class="stub-section-title">A/c No. 21 / 22 — EDLI</div>
       <div class="stub-row sub"><span class="lbl">Contribution</span><span class="val" id="s-ac21">0</span></div>
-      <div class="stub-row sub"><span class="lbl">Admin charges</span><span class="val" id="s-ac22">0</span></div>
+      <div class="stub-row sub"><span class="lbl" id="s-ac22-lbl">Admin charges</span><span class="val" id="s-ac22">0</span></div>
     </div>
     <div class="stub-grand">
       <span class="lbl">Grand total</span>
