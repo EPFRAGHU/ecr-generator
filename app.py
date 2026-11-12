@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.12.0"
-APP_BUILD = "12-11-2026 23:53 IST"
+APP_VERSION = "1.12.1"
+APP_BUILD = "13-11-2026 00:13 IST"
 
 
 @app.context_processor
@@ -1133,9 +1133,13 @@ def generate_arrear():
     from_month, till_month = data.get("from_month", ""), data.get("till_month", "")
     rate = str(data.get("rate", "12"))
     rows = data.get("rows") or []
+    exempt = data.get("exempt") or "UUU"  # same rule as the monthly ECR file
 
     if not estab_code:
         return jsonify({"error": "Establishment code is required"}), 400
+    if exempt not in EXEMPT_CODES:
+        return jsonify({"error": "Exemption status must be UUU, EUU, UUE or EUE"}), 400
+    epf_ex, edli_ex = exempt[0] == "E", exempt[2] == "E"
     months = months_between(from_month, till_month)
     if not months:
         return jsonify({"error": "Choose the arrear From and Till months (From must not be after Till)"}), 400
@@ -1162,8 +1166,8 @@ def generate_arrear():
         lines.append("#~#".join([
             str(row.get("uan", "")).strip()[:12],
             str(row.get("name", "")).strip().upper(),
-            str(c["epf_wages"]), str(c["eps_wages"]), str(c["edli_wages"]),
-            str(c["ee"]), str(c["eps"]), str(c["er"]),
+            str(c["epf_wages"]), str(c["eps_wages"]), "0" if edli_ex else str(c["edli_wages"]),
+            "0" if epf_ex else str(c["ee"]), str(c["eps"]), "0" if epf_ex else str(c["er"]),
         ]))
 
     content = "\r\n".join(lines) + "\r\n"

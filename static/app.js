@@ -690,6 +690,7 @@ document.getElementById('exempt-status').addEventListener('change', e=>{
   try { localStorage.setItem(EXEMPT_KEY, e.target.value); } catch(err) {}
   showInspFields();
   renderWageTable();
+  renderArrearTable();
   renderStub();
 });
 {
@@ -1114,6 +1115,9 @@ function renderArrearTable(){
   const months = arrearMonths();
   const rate = document.getElementById('arrear-rate').value;
   const tot = {epfW:0, epsW:0, edliW:0, ee:0, eps:0, er:0};
+  // Exempted schemes show 0, as in the arrear file: no EPF EE/ER shares, no EDLI wages.
+  const [epfEx, edliEx] = [exemptStatus()[0] === 'E', exemptStatus()[2] === 'E'];
+  const z = (ex, v) => fmt(ex ? 0 : v);
   tbody.innerHTML = '';
   arrearRows.forEach((row, i)=>{
     const c = calcArrear(row, months, rate);
@@ -1134,18 +1138,18 @@ function renderArrearTable(){
       <td><select class="cell-select" data-asel="higher" data-i="${i}">${yn(higherMode(row), Object.entries(HIGHER_MODES))}</select></td>
       ${ovrCell('epf', c.epfW)}
       ${ovrCell('eps', c.epsW)}
-      ${ovrCell('edli', c.edliW)}
-      <td class="calc">${fmt(c.ee)}</td>
+      ${edliEx ? '<td class="calc">0</td>' : ovrCell('edli', c.edliW)}
+      <td class="calc">${z(epfEx, c.ee)}</td>
       <td class="calc">${fmt(c.eps)}</td>
-      <td class="calc">${fmt(c.er)}</td>
+      <td class="calc">${z(epfEx, c.er)}</td>
       <td class="delete-cell"><button class="del-btn" data-adel="${i}">×</button></td>
     `;
     tbody.appendChild(tr);
   });
   document.getElementById('arrear-tfoot').innerHTML = arrearRows.length ? `
     <tr><td></td><td class="left" colspan="6">Total (${arrearRows.length} member${arrearRows.length === 1 ? '' : 's'})</td>
-    <td>${fmt(tot.epfW)}</td><td>${fmt(tot.epsW)}</td><td>${fmt(tot.edliW)}</td>
-    <td>${fmt(tot.ee)}</td><td>${fmt(tot.eps)}</td><td>${fmt(tot.er)}</td><td></td></tr>` : '';
+    <td>${fmt(tot.epfW)}</td><td>${fmt(tot.epsW)}</td><td>${z(edliEx, tot.edliW)}</td>
+    <td>${z(epfEx, tot.ee)}</td><td>${fmt(tot.eps)}</td><td>${z(epfEx, tot.er)}</td><td></td></tr>` : '';
   document.getElementById('arrear-count').textContent = `${arrearRows.length} entries`;
   document.getElementById('arrear-months').textContent = months.length
     ? `${months.length} month${months.length === 1 ? '' : 's'}` : 'choose From and Till';
@@ -1264,6 +1268,7 @@ document.getElementById('gen-arrear-btn').addEventListener('click', ()=>{
   downloadGenerated('/api/arrear/generate', {
     estab_code, from_month, till_month,
     rate: document.getElementById('arrear-rate').value,
+    exempt: exemptStatus(),
     rows: arrearRows,
   }, 'arrear.txt');
 });
