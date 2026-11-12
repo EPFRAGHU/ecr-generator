@@ -415,6 +415,7 @@ function renderStub(){
     ac2: epfw < 1 ? 75 : Math.max(Math.round(epfw*0.005), 500),
     ac21: Math.round(edliw*0.005),
     wageLabels: '',
+    inspMonth: monthVal,
   });
 }
 
@@ -461,6 +462,10 @@ function renderPohwStub(){
 // A/c 21; A/c 22 carries EDLI inspection charges. EPS (A/c 10) is never exempted.
 const exemptStatus = () => document.getElementById('exempt-status').value;
 const inspRate = id => (Number(document.getElementById(id).value) || 0) / 100;
+// Monthly minimum inspection charge: S.O. 2701(E) of 29-05-2026 (published 30-05-2026)
+// sets ₹8,750 PF / ₹1,250 EDLI; the 1998 notifications set ₹5 / ₹1. Only the
+// monthly challan passes inspMonth; arrear and POHW challans get no minimum.
+const inspMin = (month, now, old) => !month ? 0 : month >= '2026-06' ? now : old;
 
 function applyExemption(v){
   const ex = exemptStatus();
@@ -468,12 +473,11 @@ function applyExemption(v){
   const out = {...v, ac22: 0, epfEx, edliEx};
   if(epfEx){
     out.ac1ee = out.ac1er = out.vpf = out.hp116Er = 0;
-    // shortcut: no minimum applied to inspection charges; add one if EPFO prescribes it.
-    out.ac2 = Math.round(v.epfw * inspRate('insp-pf'));
+    out.ac2 = Math.max(Math.round(v.epfw * inspRate('insp-pf')), inspMin(v.inspMonth, 8750, 5));
   }
   if(edliEx){
     out.ac21 = 0;
-    out.ac22 = Math.round(v.edliw * inspRate('insp-edli'));
+    out.ac22 = Math.max(Math.round(v.edliw * inspRate('insp-edli')), inspMin(v.inspMonth, 1250, 1));
   }
   return out;
 }

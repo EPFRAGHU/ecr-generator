@@ -166,6 +166,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.11.2 | 12-11-2026 23:22 | Inspection charges per S.O. 2701(E) of 29-05-2026 (as corrected on 20-08-2026): EDLI default 0.005%; monthly challan minimum ₹8,750 PF and ₹1,250 EDLI from June 2026 (₹5 and ₹1 before); no minimum on arrear and POHW challans |
 | 1.11.1 | 12-11-2026 23:07 | Admin page warns when the visitor list is not on a persistent volume (it would be emptied by every redeploy), with the Coolify steps to fix it |
 | 1.11.0 | 12-11-2026 22:25 | Exemption status (UUU / EUU / UUE / EUE for EPF / EPS / EDLI) in the challan summary: an exempted PF pays no A/c No. 1 and pays inspection charges in A/c No. 2; an exempted EDLI pays no A/c No. 21 and pays inspection charges in A/c No. 22; both rates can be edited |
 | 1.10.1 | 19-10-2026 11:43 | Challan summary also on the Arrear Register (admin and EDLI at 0.5% of arrear wages, no minimum) and POHW Arrear (A/c No. 10 only) tabs, with each tab's Generate button in the summary |
