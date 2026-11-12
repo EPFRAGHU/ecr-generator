@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.11.0"
-APP_BUILD = "12-11-2026 22:25 IST"
+APP_VERSION = "1.11.1"
+APP_BUILD = "12-11-2026 23:07 IST"
 
 
 @app.context_processor
@@ -262,7 +262,10 @@ def admin():
     for p in people:
         p["created"] = _ist(p["created_at"])
         p["last"] = _ist(p["last_seen"])
-    return render_template("admin.html", stats=visitors.stats(), people=people)
+    return render_template(
+        "admin.html", stats=visitors.stats(), people=people,
+        persistent=visitors.storage_persistent(), data_dir=visitors.DATA_DIR,
+    )
 
 
 def _csv_safe(value) -> str:

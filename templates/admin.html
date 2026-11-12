@@ -25,6 +25,15 @@
 </div>
 
 <div class="admin-wrap">
+  {% if not persistent %}
+  <div class="admin-warn" role="alert">
+    <strong>This list is not saved permanently.</strong>
+    It is stored in <code>{{ data_dir }}</code> inside the app's container, so every redeploy
+    empties it. In Coolify, add Persistent Storage mounted at <code>/data</code>, set the
+    environment variable <code>DATA_DIR=/data</code>, then redeploy. Download the CSV first
+    if you want to keep the current list.
+  </div>
+  {% endif %}
   <div class="tiles">
     <div class="tile"><div class="num">{{ stats.page_views }}</div><div class="lbl">Page views</div></div>
     <div class="tile"><div class="num">{{ stats.unique_visitors }}</div><div class="lbl">Unique visitors</div></div>

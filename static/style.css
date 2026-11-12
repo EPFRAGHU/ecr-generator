@@ -211,6 +211,11 @@
   .tile .lbl{ font-size: 12px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.06em; }
   .admin-table-wrap{ overflow-x: auto; background: var(--white-ish); border: 1.5px solid var(--rule); }
   .admin-table td form{ margin: 0; }
+  .admin-warn{
+    border: 1.5px solid var(--stamp); background: rgba(160,40,40,0.06);
+    padding: 12px 16px; margin-bottom: 18px; font-size: 14px; line-height: 1.5; color: var(--ink);
+  }
+  .admin-warn strong{ color: var(--stamp); }
   .admin-empty{ padding: 24px; color: var(--ink-soft); font-size: 14px; }
 
   .month-picker-wrap{ position: relative; display: flex; align-items: center; }

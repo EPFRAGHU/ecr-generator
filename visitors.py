@@ -39,6 +39,15 @@ CREATE INDEX IF NOT EXISTS events_reg ON events(reg_id);
 """
 
 
+def storage_persistent() -> bool:
+    """True when DATA_DIR is its own mount (a Coolify/Docker volume).
+
+    shortcut: a bind mount on the same filesystem as its parent reads as
+    not mounted; check /proc/self/mountinfo if that setup is ever used.
+    """
+    return os.path.ismount(DATA_DIR)
+
+
 def _connect() -> sqlite3.Connection:
     os.makedirs(DATA_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=10)
