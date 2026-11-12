@@ -676,11 +676,25 @@ document.getElementById('add-exit-btn').addEventListener('click', ()=>{
   renderExitTable();
 });
 document.getElementById('estab-code').addEventListener('input', renderStub);
+// The exemption choice is remembered in this browser only (localStorage can
+// be blocked, e.g. private windows, so every access is guarded).
+const EXEMPT_KEY = 'ecr-exempt-status';
+function showInspFields(){
+  const ex = exemptStatus();
+  document.getElementById('insp-pf-field').hidden = ex[0] !== 'E';
+  document.getElementById('insp-edli-field').hidden = ex[2] !== 'E';
+}
 document.getElementById('exempt-status').addEventListener('change', e=>{
-  document.getElementById('insp-pf-field').hidden = e.target.value[0] !== 'E';
-  document.getElementById('insp-edli-field').hidden = e.target.value[2] !== 'E';
+  try { localStorage.setItem(EXEMPT_KEY, e.target.value); } catch(err) {}
+  showInspFields();
   renderStub();
 });
+{
+  let saved = null;
+  try { saved = localStorage.getItem(EXEMPT_KEY); } catch(err) {}
+  if(['UUU', 'EUU', 'UUE', 'EUE'].includes(saved)) document.getElementById('exempt-status').value = saved;
+  showInspFields();
+}
 ['insp-pf', 'insp-edli'].forEach(id=> document.getElementById(id).addEventListener('input', renderStub));
 document.getElementById('wage-month').addEventListener('input', ()=>{
   renderWageTable();
