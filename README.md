@@ -166,6 +166,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.13.0 | 13-11-2026 08:29 | Contribution rate 12% / 10% for the monthly ECR (10% for IBC-plan, jute, beedi, brick, coir and guar gum establishments, notification of 01-07-2026 under the EPF Scheme, 2026): employee and employer shares at the chosen rate, EPS stays 8.33%; ECR import uses the same rate; remembered after a reload |
 | 1.12.1 | 13-11-2026 00:13 | Arrear file follows the exemption status too: an exempted EPF writes 0 for the arrear EE and ER shares, and an exempted EDLI writes 0 arrear EDLI wages; the arrear register shows the same zeros |
 | 1.12.0 | 12-11-2026 23:53 | ECR text file follows the exemption status: an exempted EPF writes 0 for the EE share and the ER difference, and an exempted EDLI writes 0 EDLI wages; the wage register shows the same zeros. Inspection charges are still worked out on the actual wages |
 | 1.11.3 | 12-11-2026 23:29 | The exemption choice is remembered in the browser after a reload |

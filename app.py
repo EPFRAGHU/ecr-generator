@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.12.1"
-APP_BUILD = "13-11-2026 00:13 IST"
+APP_VERSION = "1.13.0"
+APP_BUILD = "13-11-2026 08:29 IST"
 
 
 @app.context_processor
@@ -374,6 +374,12 @@ HIGHER_MODES = {
     "N",  # EPF wages capped at the ceiling for both
 }
 
+# EPF contribution rate (employee and employer). 10% applies to IBC-plan,
+# jute, beedi, brick, coir (non-spinning) and guar gum establishments
+# (notification of 01-07-2026 under the EPF Scheme, 2026); 12% otherwise.
+# EPS stays 8.33%. Keep in sync with CONTRIB_RATES in static/app.js.
+CONTRIB_RATES = {"12": 0.12, "10": 0.10}
+
 
 def calc_row(
     epf,
@@ -383,6 +389,7 @@ def calc_row(
     higher="N",
     vpf=0,
     higher_pension=False,
+    rate="12",
 ) -> dict:
     """
     `epf` is the member's full-month EPF wages. `higher` is a HIGHER_MODES
@@ -409,7 +416,11 @@ def calc_row(
     (mode "Y"), EPS wages are the actual wage, and the EPS contribution is
     8.33% of it plus 1.16% of the part above the ceiling, all out of the
     employer's 12%. EDLI wages stay capped.
+
+    `rate` is a CONTRIB_RATES key: "12" or "10". The employee and employer
+    shares use it (12% in the examples above); EPS stays 8.33%.
     """
+    r = CONTRIB_RATES.get(str(rate), 0.12)
     if higher is True:
         higher = "Y"
     elif higher is False:
@@ -461,8 +472,8 @@ def calc_row(
     epf_w = capped_w if mode == "N" else full_w
     employer_w = full_w if mode == "Y" else capped_w
 
-    ee_contri = round_half_up(epf_w * 0.12)
-    er_contri = round_half_up(employer_w * 0.12)
+    ee_contri = round_half_up(epf_w * r)
+    er_contri = round_half_up(employer_w * r)
     eps_contri = round_half_up(eps_w * 0.0833 + excess * 0.0116)
     return {
         "epf_wages": round_half_up(epf_w),
@@ -656,7 +667,7 @@ def _wage_candidates(line: dict, wage_month: str) -> list[int]:
     return out
 
 
-def infer_ecr_row(line: dict, wage_month: str) -> dict:
+def infer_ecr_row(line: dict, wage_month: str, rate: str = "12") -> dict:
     """Register row (inputs + options) that reproduces one ECR line."""
     target = {k: line[k] for k in ("epf_wages", "eps_wages", "edli_wages", "eps_contri", "diff")}
     combos = _flag_combos(wage_month == SPLIT_MONTH)
@@ -666,7 +677,7 @@ def infer_ecr_row(line: dict, wage_month: str) -> dict:
     for allow_vpf in (False, True):
         for w in cands:
             for eps, sep, higher, hp in combos:
-                c = calc_row(w, wage_month, eps, sep, higher, 0, hp)
+                c = calc_row(w, wage_month, eps, sep, higher, 0, hp, rate)
                 if any(c[k] != v for k, v in target.items()):
                     continue
                 vpf = line["epf_contri"] - c["epf_contri"]
@@ -685,7 +696,7 @@ def infer_ecr_row(line: dict, wage_month: str) -> dict:
         # Keep the file's EPF wage; say which figures this tool would change.
         w, sep, higher, hp, vpf = line["epf_wages"], "cap", "N", False, 0
         eps = line["eps_wages"] > 0 or line["epf_wages"] == 0
-        c = calc_row(w, wage_month, eps, sep, higher, 0, hp)
+        c = calc_row(w, wage_month, eps, sep, higher, 0, hp, rate)
         labels = {"epf_wages": "EPF wages", "eps_wages": "EPS wages",
                   "edli_wages": "EDLI wages", "epf_contri": "EPF contri.",
                   "eps_contri": "EPS contri.", "diff": "Diff"}
@@ -818,11 +829,15 @@ def import_ecr():
     if not re.fullmatch(r"20\d{2}-(0[1-9]|1[0-2])", wage_month or ""):
         return jsonify({"error": "Choose the wage month before importing"}), 400
 
+    rate = request.form.get("rate", "12")
+    if rate not in CONTRIB_RATES:
+        return jsonify({"error": "Contribution rate must be 12% or 10%"}), 400
+
     lines, problems = parse_ecr_text(text)
     if not lines:
         return jsonify({"error": problems[0] if problems else "The file has no ECR lines"}), 400
 
-    rows = [infer_ecr_row(line, wage_month) for line in lines]
+    rows = [infer_ecr_row(line, wage_month, rate) for line in lines]
     _log("import")
     return jsonify({
         "status": "ok",
@@ -910,11 +925,14 @@ def generate_ecr():
     # EPF / EPS / EDLI exemption status. Exempted EPF: EE share and ER diff are 0
     # (paid to the own PF trust). Exempted EDLI: EDLI wages are 0.
     exempt = data.get("exempt") or "UUU"
+    rate = str(data.get("rate", "12"))
 
     if not estab_code or not wage_month:
         return jsonify({"error": "Establishment code and wage month are required"}), 400
     if exempt not in EXEMPT_CODES:
         return jsonify({"error": "Exemption status must be UUU, EUU, UUE or EUE"}), 400
+    if rate not in CONTRIB_RATES:
+        return jsonify({"error": "Contribution rate must be 12% or 10%"}), 400
     epf_ex, edli_ex = exempt[0] == "E", exempt[2] == "E"
 
     year, month = wage_month.split("-")
@@ -940,6 +958,7 @@ def generate_ecr():
             row_higher_epf(row),
             float(row.get("vpf") or 0),
             row_higher_pension(row),
+            rate,
         )
         ncp = int(row.get("ncp") or 0)
         refund = row.get("refund") or 0
@@ -1033,7 +1052,6 @@ def generate_exit():
 # 15,000 and 14/30 at 25,000, as in the wage register.
 # Keep calc_arrear() in sync with calcArrear() in static/app.js.
 # ---------------------------------------------------------------------------
-ARREAR_RATES = {"12": 0.12, "10": 0.10}
 MONTH_RE = re.compile(r"20\d{2}-(0[1-9]|1[0-2])")
 MAX_ARREAR_MONTHS = 120
 
@@ -1090,7 +1108,7 @@ def calc_arrear(paid, revised, months, eps_member=True, higher="N", rate="12",
     # Employer's share follows the EPF arrear, except "employee only" where
     # it stays within the ceiling.
     employer_w = min(wages["epf"], round_half_up(capped)) if mode == "E" else wages["epf"]
-    r = ARREAR_RATES.get(str(rate), 0.12)
+    r = CONTRIB_RATES.get(str(rate), 0.12)
     ee = round_half_up(wages["epf"] * r)
     eps_c = round_half_up(wages["eps"] * 0.0833)
     return {
@@ -1145,7 +1163,7 @@ def generate_arrear():
         return jsonify({"error": "Choose the arrear From and Till months (From must not be after Till)"}), 400
     if len(months) > MAX_ARREAR_MONTHS:
         return jsonify({"error": f"The arrear period is longer than {MAX_ARREAR_MONTHS} months"}), 400
-    if rate not in ARREAR_RATES:
+    if rate not in CONTRIB_RATES:
         return jsonify({"error": "Contribution rate must be 12% or 10%"}), 400
     if not rows:
         return jsonify({"error": "Add at least one member to the arrear register"}), 400

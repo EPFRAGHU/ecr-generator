@@ -27,6 +27,11 @@ const SEP_BASES = {
 
 const roundHalfUp = x => Math.floor(x + 0.5 + 1e-9);
 const wageMonth = () => document.getElementById('wage-month').value;
+// EPF contribution rate (employee and employer): 10% for IBC-plan, jute, beedi,
+// brick, coir (non-spinning) and guar gum establishments, else 12%. EPS stays
+// 8.33%. Keep in sync with CONTRIB_RATES in app.py.
+const CONTRIB_RATES = {'12': 0.12, '10': 0.10};
+const contribRate = () => document.getElementById('contri-rate').value;
 const ceilingFor = month => (month || '') > SPLIT_MONTH ? NEW_CEILING : OLD_CEILING;
 
 function calc(row){
@@ -82,8 +87,9 @@ function calc(row){
   // VPF is a voluntary employee contribution on top of the 12%. It is
   // remitted with the employee share (ECR "EPF contribution", A/c 1) and
   // does not change the employer's diff.
-  const eeContri = roundHalfUp(epfW*0.12);
-  const erContri = roundHalfUp(employerW*0.12);
+  const r = CONTRIB_RATES[contribRate()] ?? 0.12;
+  const eeContri = roundHalfUp(epfW*r);
+  const erContri = roundHalfUp(employerW*r);
   const vpf = vpfIssue(row.vpf) ? 0 : roundHalfUp(Number(row.vpf)||0);
   const epsContri = roundHalfUp(epsW*0.0833 + excess*0.0116);
   // Higher pension's 1.16% part of the EPS contribution (moved out of the
@@ -410,9 +416,10 @@ function renderStub(){
   const monthVal = document.getElementById('wage-month').value; // yyyy-mm
   fillStub({
     title: monthVal ? monthLabel(monthVal) : '',
-    note: monthVal === SPLIT_MONTH
+    note: (monthVal === SPLIT_MONTH
       ? 'Wage ceiling: ₹15,000 for 1–16 Sep, ₹25,000 from 17 Sep (S.O. 5109(E))'
-      : `Wage ceiling: ₹${fmt(ceilingFor(monthVal))}`,
+      : `Wage ceiling: ₹${fmt(ceilingFor(monthVal))}`)
+      + (contribRate() === '10' ? ' · contribution rate 10%' : ''),
     gross, epfw, epsw, edliw, ac1ee, vpf, ac1er, hp116, ac10,
     ac2: epfw < 1 ? 75 : Math.max(Math.round(epfw*0.005), 500),
     ac21: Math.round(edliw*0.005),
@@ -699,6 +706,18 @@ document.getElementById('exempt-status').addEventListener('change', e=>{
   if(['UUU', 'EUU', 'UUE', 'EUE'].includes(saved)) document.getElementById('exempt-status').value = saved;
   showInspFields();
 }
+// The contribution rate is remembered the same way.
+const RATE_KEY = 'ecr-contri-rate';
+document.getElementById('contri-rate').addEventListener('change', e=>{
+  try { localStorage.setItem(RATE_KEY, e.target.value); } catch(err) {}
+  renderWageTable();
+  renderStub();
+});
+{
+  let saved = null;
+  try { saved = localStorage.getItem(RATE_KEY); } catch(err) {}
+  if(saved in CONTRIB_RATES) document.getElementById('contri-rate').value = saved;
+}
 ['insp-pf', 'insp-edli'].forEach(id=> document.getElementById(id).addEventListener('input', renderStub));
 document.getElementById('wage-month').addEventListener('input', ()=>{
   renderWageTable();
@@ -871,6 +890,7 @@ importEcrInput.addEventListener('change', async ()=>{
   const formData = new FormData();
   formData.append('file', file);
   formData.append('wage_month', wageMonth());
+  formData.append('rate', contribRate());
   let resp;
   try{
     resp = await fetch('/api/import-ecr', { method:'POST', body: formData });
@@ -1021,7 +1041,7 @@ document.getElementById('gen-ecr-btn').addEventListener('click', ()=>{
     showToast('Fix the rows highlighted in red (invalid or duplicate UAN, NCP days or VPF) before generating');
     return;
   }
-  downloadGenerated('/api/ecr/generate', {estab_code, wage_month, exempt: exemptStatus(), rows: wageRows}, 'ecr.txt');
+  downloadGenerated('/api/ecr/generate', {estab_code, wage_month, exempt: exemptStatus(), rate: contribRate(), rows: wageRows}, 'ecr.txt');
 });
 
 document.getElementById('gen-exit-btn').addEventListener('click', ()=>{
@@ -1042,7 +1062,6 @@ document.getElementById('gen-exit-btn').addEventListener('click', ()=>{
 // to each month's ceiling. Keep calcArrear() in sync with calc_arrear() in
 // app.py.
 let arrearRows = [];
-const ARREAR_RATES = {'12': 0.12, '10': 0.10};
 const ARREAR_OVR_FIELDS = ['epf', 'eps', 'edli'];
 
 function arrearMonths(){
@@ -1088,7 +1107,7 @@ function calcArrear(row, months, rate){
     if(v !== null) w[k] = v;
   });
   const employerW = mode === 'E' ? Math.min(w.epf, roundHalfUp(capped)) : w.epf;
-  const r = ARREAR_RATES[rate] ?? 0.12;
+  const r = CONTRIB_RATES[rate] ?? 0.12;
   const ee = roundHalfUp(w.epf * r);
   const eps = roundHalfUp(w.eps * 0.0833);
   return {epfW: w.epf, epsW: w.eps, edliW: w.edli, ee, eps, er: roundHalfUp(employerW * r) - eps};

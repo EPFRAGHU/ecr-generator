@@ -89,6 +89,13 @@
       <option value="EUE">EUE — PF trust + EDLI scheme</option>
     </select>
   </div>
+  <div class="field">
+    <label for="contri-rate" title="EPF contribution rate for the employee and employer shares. 10% applies to establishments under an approved IBC resolution or repayment plan, and to jute, beedi, brick, coir (other than spinning) and guar gum establishments (notification of 01-07-2026 under the EPF Scheme, 2026). EPS stays 8.33%.">Rate</label>
+    <select id="contri-rate">
+      <option value="12">12%</option>
+      <option value="10">10% — jute, beedi, brick, coir, guar gum, IBC plan</option>
+    </select>
+  </div>
   <div class="field rate" id="insp-pf-field" hidden>
     <label for="insp-pf" title="Inspection charges paid by a PF-exempted establishment in place of A/c No. 2 admin charges, as % of EPF wages. S.O. 2701(E) of 29-05-2026 as corrected on 20-08-2026: 0.18%, minimum ₹8,750 a month from June 2026 (₹5 before).">PF inspection %</label>
     <input id="insp-pf" type="number" step="0.001" min="0" value="0.18" />
