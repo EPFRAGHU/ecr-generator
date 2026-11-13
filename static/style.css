@@ -8,6 +8,7 @@
     --stamp: #9A2B34;
     --stamp-dark: #7E2129;
     --gold: #A8823C;
+    --warn: #7A5A1E;
     --green: #3C6E52;
     --pencil: #8A8578;
     --white-ish: #F8F6EE;
@@ -741,6 +742,14 @@ td[data-note]:not([data-note=""])::after{
   margin-top: 2px;
   font-size: 10px;
   color: var(--stamp);
+}
+/* 50% wage rule: a warning, not an error, so amber rather than red */
+td[data-warn]:not([data-warn=""])::after{
+  content: attr(data-warn);
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--warn);
 }
 /* ECR import: this line will be recalculated (not an error, so not red) */
 .import-note{

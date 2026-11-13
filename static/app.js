@@ -228,6 +228,7 @@ function renderWageTable(){
       : dups.length ? `duplicate — also row ${dups.join(', ')}` : '';
     const ncpBad = ncpIssue(row.ncp);
     const vpfBad = vpfIssue(row.vpf);
+    const minW = wageRuleMin(row);
     const tr = document.createElement('tr');
     if(rowHasIssue(row)) tr.classList.add('issue-row');
     const epsOpts = [['Y','Yes'],['N','No']].map(([v,l])=>
@@ -248,7 +249,7 @@ function renderWageTable(){
       <td class="left editable" contenteditable="true" data-field="uan" data-i="${i}" data-note="${escapeHtml(uanNote)}">${escapeHtml(row.uan)}</td>
       <td class="left editable" contenteditable="true" data-field="name" data-i="${i}">${escapeHtml(row.name)}${row.importNote ? `<span class="import-note" contenteditable="false" title="This line of the imported ECR file does not match this tool's calculation. Generating the ECR will use the recalculated figures.">${escapeHtml(row.importNote)}</span>` : ''}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="gross" data-i="${i}">${row.gross}</td>
-      <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="epf" data-i="${i}">${row.epf}${epfNote}</td>
+      <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="epf" data-i="${i}" data-warn="${minW ? `below 50% of gross: at least ${fmt(minW)}` : ''}"${minW ? ` title="Code on Social Security, s. 2(88): allowances above half of the total pay count as wages, so EPF wages should be at least ${fmt(minW)}. Check the gross figure (it may include items such as overtime) before changing it."` : ''}>${row.epf}${epfNote}</td>
       <td class="editable input-box" contenteditable="true" inputmode="numeric" data-field="ncp" data-i="${i}">${row.ncp ?? 0}${ncpBad ? `<span class="issue-note" contenteditable="false">${ncpBad}</span>` : ''}</td>
       <td class="editable input-box" contenteditable="true" inputmode="decimal" data-field="vpf" data-i="${i}">${row.vpf ?? 0}${vpfBad ? `<span class="issue-note" contenteditable="false">${vpfBad}</span>` : ''}</td>
       <td><select class="cell-select" data-sfield="higher" data-i="${i}" ${hp ? 'disabled title="Set by Higher pension"' : ''}>${higherOpts}</select></td>
@@ -265,7 +266,9 @@ function renderWageTable(){
     `;
     tbody.appendChild(tr);
   });
-  document.getElementById('wage-count').textContent = `${wageRows.length} entries`;
+  const short = wageRows.filter(wageRuleMin).length;
+  document.getElementById('wage-count').textContent =
+    `${wageRows.length} entries${short ? ` · ${short} below the 50% wage rule` : ''}`;
   renderBulkHigher();
   renderBulkHp();
 
@@ -298,6 +301,19 @@ function renderWageTable(){
 }
 
 const BLANK_ON_FOCUS = ['gross','epf','ncp','vpf','refund'];
+
+// Code on Social Security, s. 2(88): allowances above half of the total pay
+// count as wages. Returns the EPF wage the rule asks for when the row's EPF
+// wages fall short of it in a way that changes the ECR (a capped member is
+// only short up to the ceiling), else 0. A warning only: it never blocks.
+function wageRuleMin(row){
+  const gross = Number(row.gross)||0, epf = Number(row.epf)||0;
+  const month = wageMonth();
+  const capped = higherMode(row) === 'N' && !hasHigherPension(row);
+  const cap = !capped ? Infinity : month === SPLIT_MONTH ? NEW_CEILING : ceilingFor(month);
+  const min = Math.min(Math.ceil(gross/2), cap);
+  return min > epf ? min : 0;
+}
 
 function onWageEdit(e){
   const i = Number(e.target.dataset.i);
