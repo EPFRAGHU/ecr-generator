@@ -32,7 +32,14 @@ const wageMonth = () => document.getElementById('wage-month').value;
 // 8.33%. Keep in sync with CONTRIB_RATES in app.py.
 const CONTRIB_RATES = {'12': 0.12, '10': 0.10};
 const contribRate = () => document.getElementById('contri-rate').value;
-const ceilingFor = month => (month || '') > SPLIT_MONTH ? NEW_CEILING : OLD_CEILING;
+// Wage ceiling by month, newest first: 5,000 from the start of EPS on
+// 16.11.1995, 6,500 from 01.06.2001, 15,000 from 01.09.2014, 25,000 from
+// 17.09.2026 (September 2026 is the split month). Keep in sync with CEILINGS
+// in app.py.
+const CEILINGS = [['2026-10', NEW_CEILING], ['2014-09', OLD_CEILING], ['2001-06', 6500], ['', 5000]];
+const EPS_START_MONTH = '1995-11'; // EPS began 16.11.1995: 15 of November's 30 days
+const ceilingFor = month => !month ? OLD_CEILING : CEILINGS.find(([start]) => month >= start)[1];
+const epsFraction = month => month && month < EPS_START_MONTH ? 0 : month === EPS_START_MONTH ? 15/30 : 1;
 
 function calc(row){
   const w = Number(row.epf)||0;
@@ -75,11 +82,11 @@ function calc(row){
       }
     }
   }else{
-    const ceiling = ceilingFor(month);
+    const ceiling = ceilingFor(month), ef = epsFraction(month);
     cappedW = Math.min(w, ceiling);
-    epsW = epsMember ? Math.min(w, ceiling) : 0;
+    epsW = epsMember ? Math.min(w, ceiling)*ef : 0;
     edliW = Math.min(w, ceiling);
-    if(hp){ epsW = w; excess = Math.max(w - ceiling, 0); }
+    if(hp){ epsW = w*ef; excess = Math.max(w - ceiling, 0)*ef; }
   }
   const fullW = (month === SPLIT_MONTH && epsMember && row.sep === 'new') ? w*SPLIT_AFTER : w;
   const epfW = mode === 'N' ? cappedW : fullW;
@@ -435,6 +442,8 @@ function renderStub(){
     note: (monthVal === SPLIT_MONTH
       ? 'Wage ceiling: ₹15,000 for 1–16 Sep, ₹25,000 from 17 Sep (S.O. 5109(E))'
       : `Wage ceiling: ₹${fmt(ceilingFor(monthVal))}`)
+      + (monthVal === EPS_START_MONTH ? ' · EPS from 16 Nov 1995 (15 of 30 days)'
+        : monthVal && monthVal < EPS_START_MONTH ? ' · no EPS before 16 Nov 1995' : '')
       + (contribRate() === '10' ? ' · contribution rate 10%' : ''),
     gross, epfw, epsw, edliw, ac1ee, vpf, ac1er, hp116, ac10,
     ac2: epfw < 1 ? 75 : Math.max(Math.round(epfw*0.005), 500),
@@ -1085,7 +1094,7 @@ function arrearMonths(){
   const till = document.getElementById('arrear-till').value;
   const re = /^(\d{4})-(\d{2})$/;
   const a = re.exec(from || ''), b = re.exec(till || '');
-  if(!a || !b) return [];
+  if(!a || !b || from < EPS_START_MONTH) return [];
   let y = Number(a[1]), m = Number(a[2]);
   const ty = Number(b[1]), tm = Number(b[2]);
   const out = [];
@@ -1112,10 +1121,12 @@ function calcArrear(row, months, rate){
   const paid = Number(row.paid)||0, revised = Number(row.revised)||0;
   const mode = higherMode(row);
   const full = (revised - paid) * months.length;
-  const capped = months.reduce((s, m)=> s + cappedMonthWage(revised, m) - cappedMonthWage(paid, m), 0);
+  const perMonth = months.map(m => [m, cappedMonthWage(revised, m) - cappedMonthWage(paid, m)]);
+  const capped = perMonth.reduce((s, [, c])=> s + c, 0);
+  const epsCapped = perMonth.reduce((s, [m, c])=> s + c*epsFraction(m), 0);
   const w = {
     epf: roundHalfUp(mode === 'N' ? capped : full),
-    eps: row.eps === 'N' ? 0 : roundHalfUp(capped),
+    eps: row.eps === 'N' ? 0 : roundHalfUp(epsCapped),
     edli: roundHalfUp(capped),
   };
   ARREAR_OVR_FIELDS.forEach(k=>{

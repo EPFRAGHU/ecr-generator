@@ -53,8 +53,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # fix or small change; set APP_BUILD to the actual date and time (IST)
 # of the release commit, read from the clock (never estimated).
 # History is in README.md under "Version history".
-APP_VERSION = "1.14.0"
-APP_BUILD = "13-11-2026 09:31 IST"
+APP_VERSION = "1.15.0"
+APP_BUILD = "15-11-2026 22:26 IST"
 
 
 @app.context_processor
@@ -363,8 +363,25 @@ def round_half_up(x: float) -> int:
     return math.floor(x + 0.5 + 1e-9)
 
 
+# Wage ceiling by month, newest first: 5,000 from the start of EPS on
+# 16.11.1995, 6,500 from 01.06.2001, 15,000 from 01.09.2014, 25,000 from
+# 17.09.2026 (September 2026 itself is the split month handled separately).
+# Keep in sync with CEILINGS in static/app.js.
+CEILINGS = (("2026-10", NEW_CEILING), ("2014-09", OLD_CEILING), ("2001-06", 6500), ("", 5000))
+EPS_START_MONTH = "1995-11"  # EPS began 16.11.1995: 15 of November's 30 days
+
+
 def ceiling_for(wage_month: str) -> int:
-    return NEW_CEILING if (wage_month or "") > SPLIT_MONTH else OLD_CEILING
+    if not wage_month:
+        return OLD_CEILING
+    return next(c for start, c in CEILINGS if wage_month >= start)
+
+
+def eps_fraction(wage_month: str) -> float:
+    """Share of the month covered by EPS: none before 16.11.1995, half of November 1995."""
+    if wage_month and wage_month < EPS_START_MONTH:
+        return 0.0
+    return 15 / 30 if wage_month == EPS_START_MONTH else 1.0
 
 
 # Higher EPF modes. Keep in sync with HIGHER_MODES in static/app.js.
@@ -404,8 +421,10 @@ def calc_row(
          2,083 + 917 at 25,000.
       N  EPF wages capped at the ceiling for both (the default).
 
-    The ceiling is 15,000 up to 16.09.2026 and 25,000 from 17.09.2026; in
-    September 2026 the wage is split per `sep_basis`.
+    The ceiling comes from CEILINGS (5,000 from 16.11.1995, 6,500 from
+    01.06.2001, 15,000 from 01.09.2014, 25,000 from 17.09.2026); in
+    September 2026 the wage is split per `sep_basis`. In November 1995 EPS
+    covers only 16-30 November (eps_fraction).
 
     `vpf` is the voluntary PF amount in rupees. It is remitted with the
     employee share, so it is added to the EPF contribution but not to the
@@ -462,12 +481,13 @@ def calc_row(
                     eps_w, excess = w, over_old * f1 + over_new * f2
     else:
         ceiling = ceiling_for(wage_month)
+        ef = eps_fraction(wage_month)
         capped_w = min(w, ceiling)
-        eps_w = min(w, ceiling) if eps_member else 0.0
+        eps_w = min(w, ceiling) * ef if eps_member else 0.0
         edli_w = min(w, ceiling)
         excess = 0.0
         if hp:
-            eps_w, excess = w, max(w - ceiling, 0)
+            eps_w, excess = w * ef, max(w - ceiling, 0) * ef
 
     epf_w = capped_w if mode == "N" else full_w
     employer_w = full_w if mode == "Y" else capped_w
@@ -1047,18 +1067,21 @@ def generate_exit():
 #
 # Each member's arrear is worked out month by month from the EPF wage already
 # paid and the revised EPF wage. EPS and EDLI arrears (and capped EPF, when
-# higher EPF is "No") only count up to that month's wage ceiling: 15,000 up
-# to August 2026, 25,000 from October 2026, and September 2026 split 16/30 at
-# 15,000 and 14/30 at 25,000, as in the wage register.
+# higher EPF is "No") only count up to that month's wage ceiling (CEILINGS:
+# 5,000 / 6,500 / 15,000 / 25,000), with September 2026 split 16/30 at
+# 15,000 and 14/30 at 25,000, as in the wage register. EPS counts only from
+# 16.11.1995, so arrears start no earlier than November 1995.
 # Keep calc_arrear() in sync with calcArrear() in static/app.js.
 # ---------------------------------------------------------------------------
-MONTH_RE = re.compile(r"20\d{2}-(0[1-9]|1[0-2])")
+MONTH_RE = re.compile(r"(19|20)\d{2}-(0[1-9]|1[0-2])")
 MAX_ARREAR_MONTHS = 120
 
 
 def months_between(from_month: str, till_month: str) -> list[str]:
     """Months from `from_month` to `till_month` inclusive (YYYY-MM)."""
     if not (MONTH_RE.fullmatch(from_month or "") and MONTH_RE.fullmatch(till_month or "")):
+        return []
+    if from_month < EPS_START_MONTH:
         return []
     y, m = (int(p) for p in from_month.split("-"))
     ty, tm = (int(p) for p in till_month.split("-"))
@@ -1095,10 +1118,12 @@ def calc_arrear(paid, revised, months, eps_member=True, higher="N", rate="12",
     paid, revised = float(paid or 0), float(revised or 0)
     mode = higher if higher in HIGHER_MODES else "N"
     full = (revised - paid) * len(months)
-    capped = sum(capped_month_wage(revised, m) - capped_month_wage(paid, m) for m in months)
+    per_month = [(m, capped_month_wage(revised, m) - capped_month_wage(paid, m)) for m in months]
+    capped = sum(c for _, c in per_month)
+    eps_capped = sum(c * eps_fraction(m) for m, c in per_month)
     wages = {
         "epf": round_half_up(capped if mode == "N" else full),
-        "eps": round_half_up(capped) if eps_member else 0,
+        "eps": round_half_up(eps_capped) if eps_member else 0,
         "edli": round_half_up(capped),
     }
     for key, value in (override or {}).items():
@@ -1160,7 +1185,7 @@ def generate_arrear():
     epf_ex, edli_ex = exempt[0] == "E", exempt[2] == "E"
     months = months_between(from_month, till_month)
     if not months:
-        return jsonify({"error": "Choose the arrear From and Till months (From must not be after Till)"}), 400
+        return jsonify({"error": "Choose the arrear From and Till months (From must not be after Till, and not before November 1995)"}), 400
     if len(months) > MAX_ARREAR_MONTHS:
         return jsonify({"error": f"The arrear period is longer than {MAX_ARREAR_MONTHS} months"}), 400
     if rate not in CONTRIB_RATES:

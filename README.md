@@ -166,6 +166,7 @@ changes.
 
 | Version | Date (IST) | Changes |
 |---|---|---|
+| 1.15.0 | 15-11-2026 22:26 | Historical wage ceilings: ₹5,000 from 16-11-1995, ₹6,500 from 01-06-2001, ₹15,000 from 01-09-2014 (₹25,000 from 17-09-2026 as before), in the wage register and the arrear register; EPS only from 16-11-1995 (November 1995 counts 15 of 30 days); arrear months can start from November 1995 |
 | 1.14.0 | 13-11-2026 09:31 | 50% wage rule warning (Code on Social Security, s. 2(88)): a row whose EPF wages are below half the gross is flagged with the minimum EPF wage, when that would change the ECR (a capped member only up to the ceiling); a warning only, it never blocks the file |
 | 1.13.0 | 13-11-2026 08:29 | Contribution rate 12% / 10% for the monthly ECR (10% for IBC-plan, jute, beedi, brick, coir and guar gum establishments, notification of 01-07-2026 under the EPF Scheme, 2026): employee and employer shares at the chosen rate, EPS stays 8.33%; ECR import uses the same rate; remembered after a reload |
 | 1.12.1 | 13-11-2026 00:13 | Arrear file follows the exemption status too: an exempted EPF writes 0 for the arrear EE and ER shares, and an exempted EDLI writes 0 arrear EDLI wages; the arrear register shows the same zeros |
